@@ -1,0 +1,126 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+* {
+  box-sizing: border-box;
+}
+
+/* ---------------------------------------------
+   Theme tokens: Light (default) / Dark / Coffee
+   Toggled via [data-theme] on <html> (themeStore.jsx).
+   theme.js COLORS reference these as var(...) so
+   every existing inline style repaints automatically.
+--------------------------------------------- */
+:root,
+[data-theme="light"] {
+  --color-bg: #ffffff;
+  --color-card: #ffffff;
+  --color-card-alt: #fafafa;
+  --color-card-border: #ecebee;
+  --color-nav-bg: rgba(255, 255, 255, 0.9);
+  --color-text: #15131a;
+  --color-text-dim: #6c6a75;
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --color-bg: #101014;
+  --color-card: #191922;
+  --color-card-alt: #1f1f29;
+  --color-card-border: #2d2d38;
+  --color-nav-bg: rgba(16, 16, 20, 0.86);
+  --color-text: #f2f1f6;
+  --color-text-dim: #a4a2b0;
+  color-scheme: dark;
+}
+
+/* Coffee mode: warm cream / white / earth tones */
+[data-theme="coffee"] {
+  --color-bg: #faf3e9;
+  --color-card: #fffcf7;
+  --color-card-alt: #f4e9da;
+  --color-card-border: #e6d3ba;
+  --color-nav-bg: rgba(250, 243, 233, 0.9);
+  --color-text: #3c2b1e;
+  --color-text-dim: #8a7360;
+  color-scheme: light;
+}
+
+/* Matcha mode: soft green / earthy tones */
+[data-theme="matcha"] {
+  --color-bg: #f2f5e9;
+  --color-card: #fbfcf6;
+  --color-card-alt: #e8edd9;
+  --color-card-border: #d3ddbc;
+  --color-nav-bg: rgba(242, 245, 233, 0.9);
+  --color-text: #2c3820;
+  --color-text-dim: #6f7d55;
+  color-scheme: light;
+}
+
+/* Space mode: cute Snoopy-in-space — soft baby-blue sky,
+   white "cloud" cards, and a drifting shooting-star layer
+   (see .space-starfield / .space-star in MotionStyles.jsx). */
+[data-theme="space"] {
+  --color-bg: #eaf4ff;
+  --color-card: #ffffff;
+  --color-card-alt: #f2f8ff;
+  --color-card-border: #cfe6fb;
+  --color-nav-bg: rgba(234, 244, 255, 0.9);
+  --color-text: #1c2b4a;
+  --color-text-dim: #5f7a9b;
+  --space-accent: #4f8ef7;
+  --space-accent-dark: #2f6fe0;
+  --space-accent-soft: rgba(79, 142, 247, 0.12);
+  color-scheme: light;
+}
+
+html {
+  background: var(--color-bg);
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  transition: background-color 220ms ease, color 220ms ease;
+}
+
+/* ---------------------------------------------
+   LexCase "Retro" mode — a cream, hairline-bordered,
+   monospace ledger look inspired by app.rysk.finance.
+   Scoped to .lexcase-retro (applied to LexCase's root
+   wrapper by LexCaseApp.jsx) so toggling it only affects
+   LexCase, never the rest of the site or the global
+   Light/Dark/Coffee/Matcha/Space theme.
+--------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+
+.lexcase-retro {
+  --color-bg: #eee9dd;
+  --color-card: #f7f3e8;
+  --color-card-alt: #e7e1cd;
+  --color-card-border: #1c1b16;
+  --color-nav-bg: rgba(238, 233, 221, 0.94);
+  --color-text: #17160f;
+  --color-text-dim: #6b6a57;
+  --lc-orange: #17160f;
+  --lc-orange-dark: #17160f;
+  --lc-orange-soft: rgba(23, 22, 15, 0.08);
+  --lc-orange-soft2: rgba(23, 22, 15, 0.14);
+  color-scheme: light;
+}
+
+.lexcase-retro,
+.lexcase-retro input,
+.lexcase-retro select,
+.lexcase-retro textarea,
+.lexcase-retro button {
+  font-family: 'Space Mono', ui-monospace, 'SF Mono', Menlo, monospace !important;
+}
+
+.lexcase-retro *,
+.lexcase-retro *::before,
+.lexcase-retro *::after {
+  box-shadow: none !important;
+}
