@@ -1,0 +1,217 @@
+import { useCallback, useEffect, useState } from "react";
+import { supabase } from "../../../supabaseClient";
+import { DEFAULT_CHARGES } from "./constants";
+
+// ---------------------------------------------
+// LexCase app data now lives in Supabase (see supabase/schema.sql),
+// scoped per signed-in user via Row Level Security — this is what
+// makes it show up again when the same account logs in from a
+// different device. `userId` is the Supabase auth user id (a uuid),
+// not the email, since RLS policies compare against auth.uid().
+//
+// Local React state is kept as the source of truth for rendering
+// (so the UI stays instant/optimistic); every mutation also fires
+// an async write to Supabase in the background. Writes are best-
+// effort: failures are logged to the console rather than blocking
+// the UI, matching how localStorage writes silently could not fail
+// before either.
+// ---------------------------------------------
+
+const LANG_KEY = "lexcase_lang";
+
+function loadLang() {
+  try {
+    return localStorage.getItem(LANG_KEY) || "th";
+  } catch {
+    return "th";
+  }
+}
+
+function saveLang(lang) {
+  try {
+    localStorage.setItem(LANG_KEY, lang);
+  } catch {
+    // ignore storage errors (e.g. private browsing / quota)
+  }
+}
+
+function logError(action, error) {
+  if (error) {
+    // eslint-disable-next-line no-console
+    console.error(`LexCase: failed to ${action}:`, error.message);
+  }
+}
+
+let uidCounter = 0;
+export function makeId(prefix = "id") {
+  uidCounter += 1;
+  return `${prefix}_${Date.now().toString(36)}_${uidCounter}`;
+}
+
+export function useLexCaseStore(userId) {
+  const [cases, setCases] = useState([]);
+  const [team, setTeam] = useState([]);
+  const [charges, setCharges] = useState(DEFAULT_CHARGES);
+  const [lang, setLang] = useState(() => loadLang());
+  const [loading, setLoading] = useState(true);
+
+  // Load everything for the signed-in user whenever the user changes
+  // (login, logout, switching accounts).
+  useEffect(() => {
+    if (!userId) {
+      setCases([]);
+      setTeam([]);
+      setCharges(DEFAULT_CHARGES);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      const [casesRes, teamRes, chargesRes] = await Promise.all([
+        supabase.from("cases").select("id, data").eq("user_id", userId),
+        supabase.from("team_members").select("id, name, position, photo").eq("user_id", userId).order("created_at"),
+        supabase.from("charges").select("label").eq("user_id", userId),
+      ]);
+      if (cancelled) return;
+      logError("load cases", casesRes.error);
+      logError("load team", teamRes.error);
+      logError("load charges", chargesRes.error);
+      setCases(!casesRes.error ? (casesRes.data || []).map((row) => ({ ...row.data, id: row.id })) : []);
+      setTeam(!teamRes.error ? teamRes.data || [] : []);
+      const labels = !chargesRes.error ? (chargesRes.data || []).map((row) => row.label) : [];
+      setCharges(labels.length ? labels : DEFAULT_CHARGES);
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  useEffect(() => { saveLang(lang); }, [lang]);
+
+  const toggleLang = useCallback(() => {
+    setLang((l) => (l === "th" ? "en" : "th"));
+  }, []);
+
+  const upsertCase = useCallback((record) => {
+    const now = new Date().toISOString();
+    const finalId = record.id || makeId("case");
+    const prev = cases.find((c) => c.id === finalId);
+    const toPersist = { ...record, id: finalId, createdAt: prev?.createdAt || record.createdAt || now, updatedAt: now };
+    setCases((current) => {
+      const idx = current.findIndex((c) => c.id === finalId);
+      if (idx === -1) return [...current, toPersist];
+      const next = [...current];
+      next[idx] = toPersist;
+      return next;
+    });
+    if (userId) {
+      const { id, ...data } = toPersist;
+      supabase.from("cases").upsert({ id, user_id: userId, data, updated_at: now })
+        .then(({ error }) => logError("save case", error));
+    }
+  }, [userId, cases]);
+
+  // Used by Excel/CSV import: takes many records at once, updates local
+  // state in a single pass, and — critically — does ONE batched Supabase
+  // upsert that the caller can await. This replaces calling upsertCase()
+  // in a loop, which fired one fire-and-forget network request per row;
+  // if any of those silently failed (rate limit, dropped connection,
+  // etc.) the import screen still said "success" even though the rows
+  // were never actually saved, so they'd vanish the next time the data
+  // was reloaded from Supabase. Returns { savedCount, error }.
+  const bulkUpsertCases = useCallback(async (records) => {
+    const now = new Date().toISOString();
+    const byId = new Map(cases.map((c) => [c.id, c]));
+    const finalized = records.map((record) => {
+      const finalId = record.id || makeId("case");
+      const prev = byId.get(finalId);
+      const next = { ...record, id: finalId, createdAt: prev?.createdAt || record.createdAt || now, updatedAt: now };
+      byId.set(finalId, next);
+      return next;
+    });
+    setCases(Array.from(byId.values()));
+
+    if (!userId || finalized.length === 0) return { savedCount: finalized.length, error: null };
+
+    const rows = finalized.map(({ id, ...data }) => ({ id, user_id: userId, data, updated_at: now }));
+    const { error } = await supabase.from("cases").upsert(rows);
+    logError("bulk-save cases", error);
+    return { savedCount: error ? 0 : finalized.length, error };
+  }, [userId, cases]);
+
+  const deleteCase = useCallback((id) => {
+    setCases((current) => current.filter((c) => c.id !== id));
+    if (userId) {
+      supabase.from("cases").delete().eq("id", id).eq("user_id", userId)
+        .then(({ error }) => logError("delete case", error));
+    }
+  }, [userId]);
+
+  // Documents attached to a case's "เอกสารในสำนวน" tab.
+  // doc: { id, title, effectiveDate, fileName, fileData (base64), uploadedAt, uploadedBy }
+  const addCaseDocument = useCallback((caseId, doc) => {
+    const now = new Date().toISOString();
+    const current = cases.find((c) => c.id === caseId);
+    if (!current) return;
+    const toPersist = { ...current, documents: [...(current.documents || []), doc], updatedAt: now };
+    setCases((cs) => cs.map((c) => (c.id === caseId ? toPersist : c)));
+    if (userId) {
+      const { id, ...data } = toPersist;
+      supabase.from("cases").upsert({ id, user_id: userId, data, updated_at: now })
+        .then(({ error }) => logError("save case document", error));
+    }
+  }, [userId, cases]);
+
+  const deleteCaseDocument = useCallback((caseId, docId) => {
+    const now = new Date().toISOString();
+    const current = cases.find((c) => c.id === caseId);
+    if (!current) return;
+    const toPersist = { ...current, documents: (current.documents || []).filter((d) => d.id !== docId), updatedAt: now };
+    setCases((cs) => cs.map((c) => (c.id === caseId ? toPersist : c)));
+    if (userId) {
+      const { id, ...data } = toPersist;
+      supabase.from("cases").upsert({ id, user_id: userId, data, updated_at: now })
+        .then(({ error }) => logError("remove case document", error));
+    }
+  }, [userId, cases]);
+
+  const addCharge = useCallback((label) => {
+    const clean = (label || "").trim();
+    if (!clean) return;
+    setCharges((current) => (current.includes(clean) ? current : [...current, clean]));
+    if (userId) {
+      supabase.from("charges").upsert({ user_id: userId, label: clean })
+        .then(({ error }) => logError("save charge", error));
+    }
+  }, [userId]);
+
+  const upsertMember = useCallback((record) => {
+    setTeam((current) => {
+      const idx = current.findIndex((m) => m.id === record.id);
+      if (idx === -1) return [...current, record];
+      const next = [...current];
+      next[idx] = record;
+      return next;
+    });
+    if (userId) {
+      const { id, name, position, photo } = record;
+      supabase.from("team_members").upsert({ id, user_id: userId, name, position: position || "", photo: photo || null })
+        .then(({ error }) => logError("save team member", error));
+    }
+  }, [userId]);
+
+  const deleteMember = useCallback((id) => {
+    setTeam((current) => current.filter((m) => m.id !== id));
+    if (userId) {
+      supabase.from("team_members").delete().eq("id", id).eq("user_id", userId)
+        .then(({ error }) => logError("delete team member", error));
+    }
+  }, [userId]);
+
+  return {
+    lang, toggleLang, loading,
+    cases, upsertCase, bulkUpsertCases, deleteCase, addCaseDocument, deleteCaseDocument,
+    team, upsertMember, deleteMember,
+    charges, addCharge,
+  };
+}
