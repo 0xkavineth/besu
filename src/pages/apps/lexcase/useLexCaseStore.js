@@ -115,6 +115,37 @@ export function useLexCaseStore(userId) {
     }
   }, [userId]);
 
+  // Used by Excel/CSV import: takes many records at once, updates local
+  // state in a single pass, and — critically — does ONE batched Supabase
+  // upsert that the caller can await. This replaces calling upsertCase()
+  // in a loop, which fired one fire-and-forget network request per row;
+  // if any of those silently failed (rate limit, dropped connection,
+  // etc.) the import screen still said "success" even though the rows
+  // were never actually saved, so they'd vanish the next time the data
+  // was reloaded from Supabase. Returns { savedCount, error }.
+  const bulkUpsertCases = useCallback(async (records) => {
+    const now = new Date().toISOString();
+    let finalized = [];
+    setCases((current) => {
+      const byId = new Map(current.map((c) => [c.id, c]));
+      finalized = records.map((record) => {
+        const finalId = record.id || makeId("case");
+        const prev = byId.get(finalId);
+        const next = { ...record, id: finalId, createdAt: prev?.createdAt || record.createdAt || now, updatedAt: now };
+        byId.set(finalId, next);
+        return next;
+      });
+      return Array.from(byId.values());
+    });
+
+    if (!userId || finalized.length === 0) return { savedCount: finalized.length, error: null };
+
+    const rows = finalized.map(({ id, ...data }) => ({ id, user_id: userId, data, updated_at: now }));
+    const { error } = await supabase.from("cases").upsert(rows);
+    logError("bulk-save cases", error);
+    return { savedCount: error ? 0 : finalized.length, error };
+  }, [userId]);
+
   const deleteCase = useCallback((id) => {
     setCases((current) => current.filter((c) => c.id !== id));
     if (userId) {
@@ -190,7 +221,7 @@ export function useLexCaseStore(userId) {
 
   return {
     lang, toggleLang, loading,
-    cases, upsertCase, deleteCase, addCaseDocument, deleteCaseDocument,
+    cases, upsertCase, bulkUpsertCases, deleteCase, addCaseDocument, deleteCaseDocument,
     team, upsertMember, deleteMember,
     charges, addCharge,
   };

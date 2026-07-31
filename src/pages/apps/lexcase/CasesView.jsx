@@ -408,7 +408,7 @@ export default function CasesView({ store, lang, searchQuery }) {
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
 
-      let count = 0;
+      const recordsToImport = [];
       rows.forEach((row) => {
         const black = splitNoYear(cell(row, "colBlackNo"));
         if (!black.no) return; // black case no. is required, skip empty/garbage rows
@@ -425,7 +425,7 @@ export default function CasesView({ store, lang, searchQuery }) {
         const chargesRaw = clean(cell(row, "colCharges"));
         const ownerRaw = clean(cell(row, "colOwner"));
 
-        const record = {
+        recordsToImport.push({
           id: existing?.id || makeId("case"),
           orderNo: clean(cell(row, "colOrderNo")) || existing?.orderNo || "",
           blackNo: black.no,
@@ -452,12 +452,17 @@ export default function CasesView({ store, lang, searchQuery }) {
           outcome: existing?.outcome || "",
           filedDay: existing?.filedDay || "", filedMonth: existing?.filedMonth || "", filedYear: existing?.filedYear || "",
           createdAt: existing?.createdAt,
-        };
-        store.upsertCase(record);
-        count += 1;
+        });
       });
 
-      setImportMsg(`${t("importSuccess", lang)} (${count} ${t("importedRows", lang)})`);
+      // One batched, awaited write — so the success message only shows
+      // once the rows are actually confirmed saved (see bulkUpsertCases).
+      const { savedCount, error } = await store.bulkUpsertCases(recordsToImport);
+      if (error) {
+        setImportMsg(`${t("importFail", lang)}: ${error.message}`);
+      } else {
+        setImportMsg(`${t("importSuccess", lang)} (${savedCount} ${t("importedRows", lang)})`);
+      }
     } catch (err) {
       setImportMsg(t("importFail", lang));
     } finally {
