@@ -169,7 +169,7 @@ function OpenAppButton({ appName, appKey, setPage, gradient, soft, shadow, appRo
       else setOpen(true);
     } else {
       // Not logged in: remember which app they wanted, send them to login first.
-      requestLogin(appKey);
+      requestLogin(appRoute || appKey);
       if (setPage) setPage("login");
     }
   };
