@@ -1,4 +1,4 @@
-import { ChevronDown, Sparkles, ArrowRight, Lock, KeyRound, Users, FileCheck2 } from "lucide-react";
+import { ChevronDown, Sparkles, ArrowRight, Lock, KeyRound, Users, FileCheck2, BookOpenText, CalendarDays } from "lucide-react";
 import { COLORS, GRADIENT_BRAND } from "../theme";
 import { useScrollY } from "../hooks";
 import { FloatingIcons, AmbientBlobs } from "../components/Patterns";
@@ -66,6 +66,41 @@ function HomePage({ setPage }) {
       <AppShowcaseSection setPage={setPage} />
       <TrustMarquee />
       <PillarsSection setPage={setPage} />
+
+      <section style={{ position: "relative", zIndex: 2, maxWidth: 1180, margin: "0 auto", padding: "30px 24px 20px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontSize: "0.74rem", fontWeight: 700, letterSpacing: "0.06em", color: COLORS.redDark, textTransform: "uppercase" }}>News & Insights</div>
+            <h2 style={{ margin: "8px 0 2px", fontFamily: "'Space Grotesk', sans-serif", fontSize: "1.8rem", fontWeight: 700 }}>ข่าวสารและบทความล่าสุด</h2>
+          </div>
+          <GhostButton onClick={() => setPage("resources")}>ดูทั้งหมด</GhostButton>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 18 }}>
+          {[
+            {
+              title: "7 ตัวชี้วัดที่สำนักงานบัญชีควรตรวจสอบก่อนปิดงบ",
+              desc: "ทำความเข้าใจแนวทางคุมคุณภาพข้อมูลและลดความเสี่ยงจากการรายงานทางการเงินที่ไม่ครบถ้วน",
+              meta: "บทความ · 5 นาทีอ่าน",
+              icon: BookOpenText,
+            },
+            {
+              title: "ปรับ workflow คดีความให้ทีมกฎหมายดำเนินงานได้เร็วขึ้น",
+              desc: "ใช้ระบบ ticket, เอกสารและการแจ้งเตือนผลลัพธ์แบบรวมศูนย์เพื่อป้องกันการหลุดรอดของงาน",
+              meta: "ข่าวสาร · 3 นาทีอ่าน",
+              icon: CalendarDays,
+            },
+          ].map((item) => (
+            <div key={item.title} style={{ background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: 20, padding: 18, display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
+              <img src="/news-illustration.svg" alt="news illustration" style={{ width: "100%", display: "block", borderRadius: 16, border: `1px solid ${COLORS.cardBorder}`, background: COLORS.cardAlt }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 8, color: COLORS.redDark, fontSize: "0.75rem", fontWeight: 700 }}>
+                <item.icon size={14} /> {item.meta}
+              </div>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: "1.1rem", fontWeight: 700 }}>{item.title}</div>
+              <div style={{ fontSize: "0.9rem", color: COLORS.textDim, lineHeight: 1.7 }}>{item.desc}</div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <section style={{ position: "relative", zIndex: 2, maxWidth: 1180, margin: "0 auto", padding: "30px 24px 20px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 18 }}>
         <FeatureCard delay={0} icon={Lock} eyebrow="เข้ารหัสข้อมูล" title="Encrypted by default" desc="ไฟล์และข้อมูลลูกค้าทุกชิ้นถูกเข้ารหัสทั้งขณะจัดเก็บและขณะส่งผ่านเครือข่าย" />
