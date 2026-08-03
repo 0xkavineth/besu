@@ -15,7 +15,7 @@ import { createClient } from "@supabase/supabase-js";
 // real Supabase call will fail with a clear, catchable error instead
 // of crashing the whole app at load time.
 // ---------------------------------------------
-const rawUrl = import.https://timkfakfjcmzulkjdozw.supabase.co;
+const rawUrl = import.https://timkfakfjcmzulkjdozw.supabase.co/rest/v1/;
 const rawKey = import.sb_publishable_DKyrNsao_pWJiFIkSddyvA_zOYbpmKr;
 
 function isValidUrl(value) {
