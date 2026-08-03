@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, Download as DownloadIcon, Menu, X, LogOut, Settings } from "lucide-react";
+import { ChevronDown, Download as DownloadIcon, Menu, X, LogOut, Settings, Folder } from "lucide-react";
 import { COLORS, GRADIENT_BRAND } from "../theme";
 import { PRODUCTS_MENU, SOLUTIONS_MENU } from "../data";
 import { useAuth } from "../authStore";
@@ -11,7 +11,17 @@ function NavDropdown({ label, items, setPage }) {
   const [open, setOpen] = useState(false);
   return (
     <div style={{ position: "relative" }} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-      <span style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 4, color: COLORS.textDim, fontWeight: 500 }}>
+      <span
+        style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 4, color: COLORS.textDim, fontWeight: 500, padding: "8px 10px", borderRadius: 999, transition: "all 200ms ease" }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = COLORS.cardAlt;
+          e.currentTarget.style.color = COLORS.text;
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = "transparent";
+          e.currentTarget.style.color = COLORS.textDim;
+        }}
+      >
         {label} <ChevronDown size={14} style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 180ms ease" }} />
       </span>
       {open && (
@@ -140,13 +150,48 @@ function Nav({ page, setPage }) {
           <Logo />
         </div>
 
-        <div className="nav-links-desktop" style={{ display: "flex", gap: 26, fontSize: "0.88rem", flexWrap: "wrap", justifyContent: "center", alignItems: "center" }}>
+        <div className="nav-links-desktop" style={{ display: "flex", gap: 12, fontSize: "0.88rem", flexWrap: "wrap", justifyContent: "center", alignItems: "center" }}>
           <NavDropdown label="ผลิตภัณฑ์" items={PRODUCTS_MENU} setPage={setPage} />
           <NavDropdown label="โซลูชั่น" items={SOLUTIONS_MENU} setPage={setPage} />
-          <span onClick={() => go("resources")} style={{ cursor: "pointer", color: page === "resources" ? COLORS.text : COLORS.textDim, fontWeight: page === "resources" ? 700 : 500 }}>
+          <button
+            onClick={() => go("apps")}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              background: page === "apps" ? COLORS.redSoft : "transparent",
+              border: `1px solid ${page === "apps" ? COLORS.redSoft2 : COLORS.cardBorder}`,
+              color: page === "apps" ? COLORS.redDark : COLORS.textDim,
+              borderRadius: 999, padding: "8px 12px", fontSize: "0.82rem", fontWeight: 700,
+              cursor: "pointer", transition: "all 200ms ease",
+            }}
+          >
+            <Folder size={14} /> แอป
+          </button>
+          <span
+            onClick={() => go("resources")}
+            style={{ cursor: "pointer", color: page === "resources" ? COLORS.text : COLORS.textDim, fontWeight: page === "resources" ? 700 : 500, padding: "8px 10px", borderRadius: 999, transition: "all 200ms ease" }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = COLORS.cardAlt;
+              e.currentTarget.style.color = COLORS.text;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+              e.currentTarget.style.color = page === "resources" ? COLORS.text : COLORS.textDim;
+            }}
+          >
             แหล่งข้อมูล
           </span>
-          <span onClick={() => go("pricing")} style={{ cursor: "pointer", color: page === "pricing" ? COLORS.text : COLORS.textDim, fontWeight: page === "pricing" ? 700 : 500 }}>
+          <span
+            onClick={() => go("pricing")}
+            style={{ cursor: "pointer", color: page === "pricing" ? COLORS.text : COLORS.textDim, fontWeight: page === "pricing" ? 700 : 500, padding: "8px 10px", borderRadius: 999, transition: "all 200ms ease" }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = COLORS.cardAlt;
+              e.currentTarget.style.color = COLORS.text;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+              e.currentTarget.style.color = page === "pricing" ? COLORS.text : COLORS.textDim;
+            }}
+          >
             ราคา
           </span>
         </div>
@@ -189,11 +234,14 @@ function Nav({ page, setPage }) {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <div style={{ fontSize: "0.75rem", fontWeight: 700, color: COLORS.textDim, letterSpacing: "0.04em", marginBottom: 6 }}>เมนูอื่นๆ</div>
-            {[["resources", "แหล่งข้อมูล"], ["pricing", "ราคา"], ["download", "ดาวน์โหลดโปรแกรม"]].map(([key, label]) => (
-              <div key={key} onClick={() => go(key)} style={{ padding: "12px 4px", fontSize: "0.95rem", fontWeight: 600, color: COLORS.text, cursor: "pointer", borderBottom: `1px solid ${COLORS.cardBorder}` }}>
-                {label}
-              </div>
-            ))}
+            {["apps", "resources", "pricing", "download"].map((key) => {
+              const labelMap = { apps: "แอปทั้งหมด", resources: "แหล่งข้อมูล", pricing: "ราคา", download: "ดาวน์โหลดโปรแกรม" };
+              return (
+                <div key={key} onClick={() => go(key)} style={{ padding: "12px 4px", fontSize: "0.95rem", fontWeight: 600, color: COLORS.text, cursor: "pointer", borderBottom: `1px solid ${COLORS.cardBorder}` }}>
+                  {labelMap[key]}
+                </div>
+              );
+            })}
           </div>
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 4px" }}>
