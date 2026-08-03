@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { COLORS } from "./theme";
 import { AuthProvider } from "./authStore";
 import { ThemeProvider } from "./themeStore";
@@ -30,6 +30,12 @@ const FULLSCREEN_APP_PAGES = new Set(["app-lexcase"]);
 export default function App() {
   const [page, setPage] = useState("home");
   const isFullscreenApp = FULLSCREEN_APP_PAGES.has(page);
+
+  useEffect(() => {
+    if (!isFullscreenApp) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [page, isFullscreenApp]);
 
   const PAGES = {
     home: <HomePage setPage={setPage} />,
