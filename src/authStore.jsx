@@ -47,12 +47,19 @@ function translateAuthError(error) {
   return msg || "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง";
 }
 
+const REDIRECT_STORAGE_KEY = "obfice_pending_redirect";
+
+const readPendingRedirect = () => {
+  if (typeof window === "undefined") return null;
+  return window.sessionStorage.getItem(REDIRECT_STORAGE_KEY) || null;
+};
+
 const AuthContext = createContext(null);
 
 function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [initializing, setInitializing] = useState(true);
-  const [pendingRedirect, setPendingRedirect] = useState(null);
+  const [pendingRedirect, setPendingRedirect] = useState(() => readPendingRedirect());
 
   const loadSessionUser = useCallback(async (supaUser) => {
     if (!supaUser) {
@@ -223,6 +230,10 @@ function AuthProvider({ children }) {
   // them back to once they successfully log in / sign up.
   const requestLogin = useCallback((redirectTo) => {
     setPendingRedirect(redirectTo);
+    if (typeof window !== "undefined") {
+      if (redirectTo) window.sessionStorage.setItem(REDIRECT_STORAGE_KEY, redirectTo);
+      else window.sessionStorage.removeItem(REDIRECT_STORAGE_KEY);
+    }
   }, []);
 
   const consumeRedirect = useCallback(() => {
@@ -231,6 +242,9 @@ function AuthProvider({ children }) {
       target = current;
       return null;
     });
+    if (typeof window !== "undefined") {
+      window.sessionStorage.removeItem(REDIRECT_STORAGE_KEY);
+    }
     return target;
   }, []);
 
