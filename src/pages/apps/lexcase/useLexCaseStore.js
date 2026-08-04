@@ -80,6 +80,18 @@ function formatSubAccountError(error) {
   return error?.message || "ไม่สามารถสร้าง sub-account ได้";
 }
 
+async function resolveScopeUserId(currentUserId) {
+  if (!currentUserId) return null;
+  const { data, error } = await supabase
+    .from("lexcase_sub_accounts")
+    .select("user_id")
+    .eq("auth_user_id", currentUserId)
+    .maybeSingle();
+
+  if (!error && data?.user_id) return data.user_id;
+  return currentUserId;
+}
+
 let uidCounter = 0;
 export function makeId(prefix = "id") {
   uidCounter += 1;
@@ -151,11 +163,14 @@ export function useLexCaseStore(userId) {
 
     let cancelled = false;
     (async () => {
+      const scopeUserId = await resolveScopeUserId(userId);
+      if (cancelled) return;
+
       const [casesRes, teamRes, subAccountsRes, chargesRes] = await Promise.all([
-        supabase.from("cases").select("id, data").eq("user_id", userId),
-        supabase.from("team_members").select("id, name, position, photo").eq("user_id", userId).order("created_at"),
-        supabase.from("lexcase_sub_accounts").select("id, email, display_name, role, permissions, status").eq("user_id", userId).order("created_at"),
-        supabase.from("charges").select("label").eq("user_id", userId),
+        supabase.from("cases").select("id, data").eq("user_id", scopeUserId),
+        supabase.from("team_members").select("id, name, position, photo").eq("user_id", scopeUserId).order("created_at"),
+        supabase.from("lexcase_sub_accounts").select("id, auth_user_id, email, display_name, role, permissions, status").eq("user_id", scopeUserId).order("created_at"),
+        supabase.from("charges").select("label").eq("user_id", scopeUserId),
       ]);
       if (cancelled) return;
       logError("load cases", casesRes.error);
@@ -329,6 +344,7 @@ export function useLexCaseStore(userId) {
     const cleanPassword = (record.password || "").trim();
     const role = record.role || "viewer";
     const permissions = record.permissions || {};
+    const scopeUserId = await resolveScopeUserId(userId);
 
     if (!cleanName) throw new Error("กรุณากรอกชื่อ-นามสกุล");
     if (!cleanEmail || !cleanEmail.includes("@")) throw new Error("กรุณากรอกอีเมลให้ถูกต้อง");
@@ -356,7 +372,7 @@ export function useLexCaseStore(userId) {
 
     const memberSync = await supabase.from("team_members").upsert({
       id: teamMemberId,
-      user_id: userId,
+      user_id: scopeUserId,
       name: cleanName,
       position: record.position || "",
       photo: record.photo || null,
@@ -368,7 +384,7 @@ export function useLexCaseStore(userId) {
 
     const subAccountSync = await supabase.from("lexcase_sub_accounts").upsert({
       id: subAccountId,
-      user_id: userId,
+      user_id: scopeUserId,
       auth_user_id: authUserId,
       email: cleanEmail,
       display_name: cleanName,

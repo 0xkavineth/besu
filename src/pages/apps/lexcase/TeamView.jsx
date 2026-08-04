@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { COLORS, GRADIENT_ORANGE } from "../../../theme";
 import { Modal, Field, TextInput, IconButton } from "./parts";
@@ -25,7 +25,7 @@ function initials(name) {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
-export default function TeamView({ store, lang }) {
+export default function TeamView({ store, lang, openMemberModalTrigger = 0 }) {
   const [open, setOpen] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [form, setForm] = useState({
@@ -47,6 +47,13 @@ export default function TeamView({ store, lang }) {
       { key: "managePermissions", label: "Permissions" },
     ];
   }, []);
+
+  useEffect(() => {
+    if (openMemberModalTrigger > 0) {
+      setSaveError("");
+      setOpen(true);
+    }
+  }, [openMemberModalTrigger]);
 
   const save = async () => {
     const cleanName = (form.name || "").trim();
@@ -103,15 +110,6 @@ export default function TeamView({ store, lang }) {
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: "1.3rem", fontWeight: 700 }}>{t("nav_team", lang)}</div>
-        <button
-          onClick={() => {
-            setSaveError("");
-            setOpen(true);
-          }}
-          style={{ display: "flex", alignItems: "center", gap: 8, background: COLORS.orange, color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontWeight: 700, cursor: "pointer" }}
-        >
-          <Plus size={16} /> {t("addMember", lang)}
-        </button>
       </div>
 
       {store.team.length === 0 ? (

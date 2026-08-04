@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import {
   LayoutDashboard, FolderKanban, Gavel, CalendarDays, Users, PieChart,
   ArrowLeft, Search, Bell, Languages, ChevronDown, LogOut,
-  PanelLeftClose, PanelLeftOpen, WifiOff, Landmark,
+  PanelLeftClose, PanelLeftOpen, WifiOff, Landmark, Plus,
 } from "lucide-react";
 import { COLORS, GRADIENT_ORANGE } from "../../../theme";
 import { useAuth } from "../../../authStore";
@@ -79,9 +79,13 @@ export default function LexCaseApp({ setPage }) {
   const { mode } = useThemeMode();
   const store = useLexCaseStore(user?.id);
   const [view, setView] = useState("dashboard");
-  const currentRole = store.subAccounts.find((account) => account.email?.toLowerCase() === user?.email?.toLowerCase())?.role || "admin";
+  const currentAccount = store.subAccounts.find((account) => account.auth_user_id === user?.id || account.email?.toLowerCase() === user?.email?.toLowerCase());
+  const currentRole = currentAccount?.role || "admin";
   const currentPermissions = ROLE_PERMISSIONS[currentRole] || ROLE_PERMISSIONS.admin;
+  const isSubAccount = !!currentAccount;
+  const accountTypeLabel = isSubAccount ? "Sub" : "Admin";
   const [search, setSearch] = useState("");
+  const [openAddTeamModal, setOpenAddTeamModal] = useState(0);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
@@ -137,7 +141,7 @@ export default function LexCaseApp({ setPage }) {
     cases: <CasesView store={store} lang={lang} searchQuery={search} />,
     execution: <ExecutionView store={store} lang={lang} />,
     calendar: <CalendarView store={store} lang={lang} />,
-    team: <TeamView store={store} lang={lang} />,
+    team: <TeamView store={store} lang={lang} openMemberModalTrigger={openAddTeamModal} />,
     summary: <SummaryView store={store} lang={lang} />,
   };
 
@@ -258,6 +262,23 @@ export default function LexCaseApp({ setPage }) {
 
             <ThemeToggle />
 
+            {currentPermissions.manageTeam && (
+              <button
+                onClick={() => {
+                  setOpenAddTeamModal((count) => count + 1);
+                  setView("team");
+                }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  background: COLORS.orangeSoft, border: `1px solid ${COLORS.orangeSoft2 || COLORS.cardBorder}`,
+                  color: COLORS.orangeDark, borderRadius: 999, padding: "7px 12px", cursor: "pointer",
+                  fontWeight: 700, fontSize: "0.78rem",
+                }}
+              >
+                <Plus size={14} /> {t("addMember", lang)}
+              </button>
+            )}
+
             <div style={{ position: "relative" }} onMouseEnter={() => setNotifOpen(true)} onMouseLeave={() => setNotifOpen(false)}>
               <button style={{ width: 36, height: 36, borderRadius: "50%", border: `1px solid ${COLORS.cardBorder}`, background: COLORS.cardAlt, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
                 <Bell size={16} color={COLORS.text} />
@@ -290,7 +311,17 @@ export default function LexCaseApp({ setPage }) {
               </button>
               {profileOpen && (
                 <div style={{ position: "absolute", right: 0, top: 42, width: 200, background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: 12, boxShadow: "0 20px 40px -16px rgba(20,18,30,0.18)", padding: 8, zIndex: 20 }}>
-                  <div style={{ padding: "8px 10px", fontSize: "0.82rem", fontWeight: 700 }}>{user?.name}</div>
+                  <div style={{ padding: "8px 10px 6px", fontSize: "0.82rem", fontWeight: 700 }}>{user?.name}</div>
+                  <div style={{ padding: "0 10px 8px" }}>
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 999,
+                      background: isSubAccount ? COLORS.cardAlt : COLORS.orangeSoft,
+                      color: isSubAccount ? COLORS.text : COLORS.orangeDark,
+                      fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase",
+                    }}>
+                      {accountTypeLabel}
+                    </span>
+                  </div>
                   <button
                     onClick={() => setPage("settings")}
                     style={{ display: "flex", width: "100%", alignItems: "center", gap: 8, padding: "9px 10px", borderRadius: 8, fontSize: "0.82rem", color: COLORS.text, background: "transparent", border: "none", cursor: "pointer", textAlign: "left" }}
