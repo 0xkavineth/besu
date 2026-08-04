@@ -8,7 +8,7 @@ import { COLORS, GRADIENT_ORANGE } from "../../../theme";
 import { useAuth } from "../../../authStore";
 import { useThemeMode } from "../../../themeStore";
 import ThemeToggle from "../../../components/ThemeToggle";
-import { useLexCaseStore } from "./useLexCaseStore";
+import { ROLE_PERMISSIONS, useLexCaseStore } from "./useLexCaseStore";
 import { t } from "./constants";
 import DashboardView from "./DashboardView";
 import CasesView from "./CasesView";
@@ -79,6 +79,8 @@ export default function LexCaseApp({ setPage }) {
   const { mode } = useThemeMode();
   const store = useLexCaseStore(user?.id);
   const [view, setView] = useState("dashboard");
+  const currentRole = store.subAccounts.find((account) => account.email?.toLowerCase() === user?.email?.toLowerCase())?.role || "admin";
+  const currentPermissions = ROLE_PERMISSIONS[currentRole] || ROLE_PERMISSIONS.admin;
   const [search, setSearch] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -158,7 +160,10 @@ export default function LexCaseApp({ setPage }) {
         </div>
 
         <nav style={{ display: "flex", flexDirection: "column", gap: 3, flex: 1 }}>
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.filter((item) => {
+            if (item.key === "team") return currentPermissions.manageTeam;
+            return true;
+          }).map((item) => {
             const active = view === item.key;
             const Icon = item.icon;
             return (

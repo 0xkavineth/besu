@@ -78,6 +78,27 @@ export function makeId(prefix = "id") {
   return `${prefix}_${Date.now().toString(36)}_${uidCounter}`;
 }
 
+export const ROLE_PERMISSIONS = {
+  viewer: {
+    viewCases: true,
+    editCases: false,
+    manageTeam: false,
+    managePermissions: false,
+  },
+  manager: {
+    viewCases: true,
+    editCases: true,
+    manageTeam: true,
+    managePermissions: false,
+  },
+  admin: {
+    viewCases: true,
+    editCases: true,
+    manageTeam: true,
+    managePermissions: true,
+  },
+};
+
 export function useLexCaseStore(userId) {
   const [cases, setCases] = useState([]);
   const [team, setTeam] = useState([]);
@@ -336,7 +357,12 @@ export function useLexCaseStore(userId) {
       email: cleanEmail,
       display_name: cleanName,
       role,
-      permissions,
+      permissions: {
+        viewCases: true,
+        editCases: permissions?.editCases ?? false,
+        manageTeam: permissions?.manageTeam ?? false,
+        managePermissions: permissions?.managePermissions ?? false,
+      },
       status: authUserId ? "active" : "pending",
     });
     logError("save sub-account", subAccountSync.error);
@@ -346,7 +372,12 @@ export function useLexCaseStore(userId) {
       email: cleanEmail,
       display_name: cleanName,
       role,
-      permissions,
+      permissions: {
+        viewCases: true,
+        editCases: permissions?.editCases ?? false,
+        manageTeam: permissions?.manageTeam ?? false,
+        managePermissions: permissions?.managePermissions ?? false,
+      },
       status: authUserId ? "active" : "pending",
     }];
     setSubAccounts(nextSubAccounts);
