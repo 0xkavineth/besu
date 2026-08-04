@@ -86,6 +86,7 @@ export default function LexCaseApp({ setPage }) {
   const accountTypeLabel = isSubAccount ? "Sub" : "Admin";
   const [search, setSearch] = useState("");
   const [openAddTeamModal, setOpenAddTeamModal] = useState(0);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
@@ -263,20 +264,56 @@ export default function LexCaseApp({ setPage }) {
             <ThemeToggle />
 
             {currentPermissions.manageTeam && (
-              <button
-                onClick={() => {
-                  setOpenAddTeamModal((count) => count + 1);
-                  setView("team");
-                }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  background: COLORS.orangeSoft, border: `1px solid ${COLORS.orangeSoft2 || COLORS.cardBorder}`,
-                  color: COLORS.orangeDark, borderRadius: 999, padding: "7px 12px", cursor: "pointer",
-                  fontWeight: 700, fontSize: "0.78rem",
-                }}
-              >
-                <Plus size={14} /> {t("addMember", lang)}
-              </button>
+              <div style={{ position: "relative" }}>
+                <button
+                  onClick={() => setAddMenuOpen((open) => !open)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6,
+                    background: COLORS.orangeSoft, border: `1px solid ${COLORS.orangeSoft2 || COLORS.cardBorder}`,
+                    color: COLORS.orangeDark, borderRadius: 999, padding: "7px 12px", cursor: "pointer",
+                    fontWeight: 700, fontSize: "0.78rem",
+                  }}
+                >
+                  <Plus size={14} /> {t("addMember", lang)}
+                  <ChevronDown size={14} />
+                </button>
+
+                {addMenuOpen && (
+                  <div style={{ position: "absolute", right: 0, top: 40, minWidth: 280, background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: 14, boxShadow: "0 18px 40px -18px rgba(20,18,30,0.24)", padding: 10, zIndex: 25 }}>
+                    <button
+                      onClick={() => {
+                        setOpenAddTeamModal((count) => count + 1);
+                        setView("team");
+                        setAddMenuOpen(false);
+                      }}
+                      style={{ width: "100%", textAlign: "left", padding: "10px 12px", borderRadius: 10, border: "none", background: COLORS.cardAlt, color: COLORS.text, cursor: "pointer", fontWeight: 700, fontSize: "0.8rem" }}
+                    >
+                      {t("addMember", lang)}
+                    </button>
+
+                    <div style={{ marginTop: 10, maxHeight: 220, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+                      {store.subAccounts.length === 0 ? (
+                        <div style={{ padding: "10px 8px", color: COLORS.textDim, fontSize: "0.78rem" }}>No sub-accounts yet</div>
+                      ) : (
+                        store.subAccounts.map((member) => {
+                          const badge = member.status === "pending" ? { label: "Pending", bg: "rgba(245,158,11,0.16)", text: "#92400e" } : member.status === "email_rate_limited" ? { label: "Email limited", bg: "rgba(239,68,68,0.16)", text: "#991b1b" } : { label: "Active", bg: "rgba(34,197,94,0.16)", text: "#166534" };
+                          return (
+                            <div key={member.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 10px", borderRadius: 10, background: COLORS.cardAlt }}>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontWeight: 700, fontSize: "0.78rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{member.display_name || member.email}</div>
+                                <div style={{ fontSize: "0.72rem", color: COLORS.textDim }}>{member.email}</div>
+                              </div>
+                              <div style={{ fontSize: "0.68rem", padding: "3px 7px", borderRadius: 999, background: badge.bg, color: badge.text, fontWeight: 700, whiteSpace: "nowrap" }}>
+                                {badge.label}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             <div style={{ position: "relative" }} onMouseEnter={() => setNotifOpen(true)} onMouseLeave={() => setNotifOpen(false)}>

@@ -127,11 +127,21 @@ export function useLexCaseStore(userId) {
   const [lang, setLang] = useState(() => loadLang());
   const [loading, setLoading] = useState(true);
   const [syncError, setSyncError] = useState(false);
+  const [scopeUserId, setScopeUserId] = useState(userId);
 
   const persistSnapshot = useCallback((nextCases = cases, nextTeam = team, nextCharges = charges, nextSubAccounts = subAccounts) => {
-    if (!userId) return;
-    saveCache(userId, { cases: nextCases, team: nextTeam, charges: nextCharges, subAccounts: nextSubAccounts });
-  }, [userId, cases, team, charges, subAccounts]);
+    if (!scopeUserId) return;
+    saveCache(scopeUserId, { cases: nextCases, team: nextTeam, charges: nextCharges, subAccounts: nextSubAccounts });
+  }, [scopeUserId, cases, team, charges, subAccounts]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const resolvedScopeUserId = userId ? await resolveScopeUserId(userId) : null;
+      if (!cancelled) setScopeUserId(resolvedScopeUserId || userId || null);
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
 
   // Load everything for the signed-in user whenever the user changes
   // (login, logout, switching accounts, or simply navigating back
@@ -148,9 +158,15 @@ export function useLexCaseStore(userId) {
       return;
     }
 
+    const targetScopeUserId = scopeUserId || userId;
+    if (!targetScopeUserId) {
+      setLoading(false);
+      return;
+    }
+
     // Show the last known-good snapshot immediately — no blank screen
     // while the network round-trip to Supabase is in flight.
-    const cached = loadCache(userId);
+    const cached = loadCache(targetScopeUserId);
     if (cached) {
       setCases(cached.cases || []);
       setTeam(cached.team || []);
@@ -163,14 +179,13 @@ export function useLexCaseStore(userId) {
 
     let cancelled = false;
     (async () => {
-      const scopeUserId = await resolveScopeUserId(userId);
       if (cancelled) return;
 
       const [casesRes, teamRes, subAccountsRes, chargesRes] = await Promise.all([
-        supabase.from("cases").select("id, data").eq("user_id", scopeUserId),
-        supabase.from("team_members").select("id, name, position, photo").eq("user_id", scopeUserId).order("created_at"),
-        supabase.from("lexcase_sub_accounts").select("id, auth_user_id, email, display_name, role, permissions, status").eq("user_id", scopeUserId).order("created_at"),
-        supabase.from("charges").select("label").eq("user_id", scopeUserId),
+        supabase.from("cases").select("id, data").eq("user_id", targetScopeUserId),
+        supabase.from("team_members").select("id, name, position, photo").eq("user_id", targetScopeUserId).order("created_at"),
+        supabase.from("lexcase_sub_accounts").select("id, auth_user_id, email, display_name, role, permissions, status").eq("user_id", targetScopeUserId).order("created_at"),
+        supabase.from("charges").select("label").eq("user_id", targetScopeUserId),
       ]);
       if (cancelled) return;
       logError("load cases", casesRes.error);
@@ -202,15 +217,15 @@ export function useLexCaseStore(userId) {
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [userId, scopeUserId]);
 
   // Mirror local state into the per-user cache on every change, so the
   // next mount (e.g. navigating back into the page) has an instant,
   // reliable fallback regardless of Supabase's availability.
   useEffect(() => {
-    if (!userId) return;
-    saveCache(userId, { cases, team, charges, subAccounts });
-  }, [userId, cases, team, charges, subAccounts]);
+    if (!scopeUserId) return;
+    saveCache(scopeUserId, { cases, team, charges, subAccounts });
+  }, [scopeUserId, cases, team, charges, subAccounts]);
 
   useEffect(() => { saveLang(lang); }, [lang]);
 
@@ -229,12 +244,12 @@ export function useLexCaseStore(userId) {
       persistSnapshot(nextCases, team, charges);
       return nextCases;
     });
-    if (userId) {
+    if (scopeUserId) {
       const { id, ...data } = toPersist;
-      supabase.from("cases").upsert({ id, user_id: userId, data, updated_at: now })
+      supabase.from("cases").upsert({ id, user_id: scopeUserId, data, updated_at: now })
         .then(({ error }) => logError("save case", error));
     }
-  }, [userId, cases, team, charges, persistSnapshot]);
+  }, [scopeUserId, userId, cases, team, charges, persistSnapshot]);
 
   // Used by Excel/CSV import: takes many records at once, updates local
   // state in a single pass, and — critically — does ONE batched Supabase
@@ -258,23 +273,23 @@ export function useLexCaseStore(userId) {
     setCases(nextCases);
     persistSnapshot(nextCases, team, charges);
 
-    if (!userId || finalized.length === 0) return { savedCount: finalized.length, error: null };
+    if (!scopeUserId || finalized.length === 0) return { savedCount: finalized.length, error: null };
 
-    const rows = finalized.map(({ id, ...data }) => ({ id, user_id: userId, data, updated_at: now }));
+    const rows = finalized.map(({ id, ...data }) => ({ id, user_id: scopeUserId, data, updated_at: now }));
     const { error } = await supabase.from("cases").upsert(rows);
     logError("bulk-save cases", error);
     return { savedCount: error ? 0 : finalized.length, error };
-  }, [userId, cases, team, charges, persistSnapshot]);
+  }, [scopeUserId, userId, cases, team, charges, persistSnapshot]);
 
   const deleteCase = useCallback((id) => {
     const nextCases = cases.filter((c) => c.id !== id);
     setCases(nextCases);
     persistSnapshot(nextCases, team, charges);
-    if (userId) {
-      supabase.from("cases").delete().eq("id", id).eq("user_id", userId)
+    if (scopeUserId) {
+      supabase.from("cases").delete().eq("id", id).eq("user_id", scopeUserId)
         .then(({ error }) => logError("delete case", error));
     }
-  }, [userId, cases, team, charges, persistSnapshot]);
+  }, [scopeUserId, userId, cases, team, charges, persistSnapshot]);
 
   // Documents attached to a case's "เอกสารในสำนวน" tab.
   // doc: { id, title, effectiveDate, fileName, fileData (base64), uploadedAt, uploadedBy }
@@ -286,12 +301,12 @@ export function useLexCaseStore(userId) {
     const nextCases = cases.map((c) => (c.id === caseId ? toPersist : c));
     setCases(nextCases);
     persistSnapshot(nextCases, team, charges);
-    if (userId) {
+    if (scopeUserId) {
       const { id, ...data } = toPersist;
-      supabase.from("cases").upsert({ id, user_id: userId, data, updated_at: now })
+      supabase.from("cases").upsert({ id, user_id: scopeUserId, data, updated_at: now })
         .then(({ error }) => logError("save case document", error));
     }
-  }, [userId, cases, team, charges, persistSnapshot]);
+  }, [scopeUserId, userId, cases, team, charges, persistSnapshot]);
 
   const deleteCaseDocument = useCallback((caseId, docId) => {
     const now = new Date().toISOString();
@@ -301,12 +316,12 @@ export function useLexCaseStore(userId) {
     const nextCases = cases.map((c) => (c.id === caseId ? toPersist : c));
     setCases(nextCases);
     persistSnapshot(nextCases, team, charges);
-    if (userId) {
+    if (scopeUserId) {
       const { id, ...data } = toPersist;
-      supabase.from("cases").upsert({ id, user_id: userId, data, updated_at: now })
+      supabase.from("cases").upsert({ id, user_id: scopeUserId, data, updated_at: now })
         .then(({ error }) => logError("remove case document", error));
     }
-  }, [userId, cases, team, charges, persistSnapshot]);
+  }, [scopeUserId, userId, cases, team, charges, persistSnapshot]);
 
   const addCharge = useCallback((label) => {
     const clean = (label || "").trim();
@@ -314,11 +329,11 @@ export function useLexCaseStore(userId) {
     const nextCharges = charges.includes(clean) ? charges : [...charges, clean];
     setCharges(nextCharges);
     persistSnapshot(cases, team, nextCharges);
-    if (userId) {
-      supabase.from("charges").upsert({ user_id: userId, label: clean })
+    if (scopeUserId) {
+      supabase.from("charges").upsert({ user_id: scopeUserId, label: clean })
         .then(({ error }) => logError("save charge", error));
     }
-  }, [userId, cases, team, charges, persistSnapshot]);
+  }, [scopeUserId, userId, cases, team, charges, persistSnapshot]);
 
   const upsertMember = useCallback((record) => {
     const nextTeam = (() => {
@@ -330,12 +345,12 @@ export function useLexCaseStore(userId) {
     })();
     setTeam(nextTeam);
     persistSnapshot(cases, nextTeam, charges, subAccounts);
-    if (userId) {
+    if (scopeUserId) {
       const { id, name, position, photo } = record;
-      supabase.from("team_members").upsert({ id, user_id: userId, name, position: position || "", photo: photo || null })
+      supabase.from("team_members").upsert({ id, user_id: scopeUserId, name, position: position || "", photo: photo || null })
         .then(({ error }) => logError("save team member", error));
     }
-  }, [userId, cases, team, charges, subAccounts, persistSnapshot]);
+  }, [scopeUserId, userId, cases, team, charges, subAccounts, persistSnapshot]);
 
   const createTeamMember = useCallback(async (record) => {
     if (!userId) return null;
@@ -344,7 +359,7 @@ export function useLexCaseStore(userId) {
     const cleanPassword = (record.password || "").trim();
     const role = record.role || "viewer";
     const permissions = record.permissions || {};
-    const scopeUserId = await resolveScopeUserId(userId);
+    const targetScopeUserId = scopeUserId || await resolveScopeUserId(userId);
 
     if (!cleanName) throw new Error("กรุณากรอกชื่อ-นามสกุล");
     if (!cleanEmail || !cleanEmail.includes("@")) throw new Error("กรุณากรอกอีเมลให้ถูกต้อง");
@@ -372,7 +387,7 @@ export function useLexCaseStore(userId) {
 
     const memberSync = await supabase.from("team_members").upsert({
       id: teamMemberId,
-      user_id: scopeUserId,
+      user_id: targetScopeUserId,
       name: cleanName,
       position: record.position || "",
       photo: record.photo || null,
@@ -384,7 +399,7 @@ export function useLexCaseStore(userId) {
 
     const subAccountSync = await supabase.from("lexcase_sub_accounts").upsert({
       id: subAccountId,
-      user_id: scopeUserId,
+      user_id: targetScopeUserId,
       auth_user_id: authUserId,
       email: cleanEmail,
       display_name: cleanName,
@@ -413,17 +428,17 @@ export function useLexCaseStore(userId) {
     }
 
     return { teamMemberId, subAccountId, authUserId };
-  }, [userId, cases, team, charges, subAccounts, persistSnapshot]);
+  }, [scopeUserId, userId, cases, team, charges, subAccounts, persistSnapshot]);
 
   const deleteMember = useCallback((id) => {
     const nextTeam = team.filter((m) => m.id !== id);
     setTeam(nextTeam);
     persistSnapshot(cases, nextTeam, charges, subAccounts);
-    if (userId) {
-      supabase.from("team_members").delete().eq("id", id).eq("user_id", userId)
+    if (scopeUserId) {
+      supabase.from("team_members").delete().eq("id", id).eq("user_id", scopeUserId)
         .then(({ error }) => logError("delete team member", error));
     }
-  }, [userId, cases, team, charges, subAccounts, persistSnapshot]);
+  }, [scopeUserId, userId, cases, team, charges, subAccounts, persistSnapshot]);
 
   const upsertSubAccount = useCallback((record) => {
     const nextSubAccounts = (() => {
@@ -435,11 +450,11 @@ export function useLexCaseStore(userId) {
     })();
     setSubAccounts(nextSubAccounts);
     persistSnapshot(cases, team, charges, nextSubAccounts);
-    if (userId) {
+    if (scopeUserId) {
       const { id, email, display_name, role, permissions, status } = record;
       supabase.from("lexcase_sub_accounts").upsert({
         id,
-        user_id: userId,
+        user_id: scopeUserId,
         email: (email || "").trim().toLowerCase(),
         display_name: (display_name || "").trim(),
         role: role || "viewer",
@@ -447,17 +462,17 @@ export function useLexCaseStore(userId) {
         status: status || "active",
       }).then(({ error }) => logError("save sub-account", error));
     }
-  }, [userId, cases, team, charges, subAccounts, persistSnapshot]);
+  }, [scopeUserId, userId, cases, team, charges, subAccounts, persistSnapshot]);
 
   const deleteSubAccount = useCallback((id) => {
     const nextSubAccounts = subAccounts.filter((m) => m.id !== id);
     setSubAccounts(nextSubAccounts);
     persistSnapshot(cases, team, charges, nextSubAccounts);
-    if (userId) {
-      supabase.from("lexcase_sub_accounts").delete().eq("id", id).eq("user_id", userId)
+    if (scopeUserId) {
+      supabase.from("lexcase_sub_accounts").delete().eq("id", id).eq("user_id", scopeUserId)
         .then(({ error }) => logError("delete sub-account", error));
     }
-  }, [userId, cases, team, charges, subAccounts, persistSnapshot]);
+  }, [scopeUserId, userId, cases, team, charges, subAccounts, persistSnapshot]);
 
   return {
     lang, toggleLang, loading, syncError,

@@ -25,6 +25,18 @@ function initials(name) {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
+function statusBadge(status) {
+  const normalized = (status || "active").toLowerCase();
+  const variants = {
+    active: { bg: "rgba(34,197,94,0.16)", text: "#166534" },
+    pending: { bg: "rgba(245,158,11,0.16)", text: "#92400e" },
+    email_rate_limited: { bg: "rgba(239,68,68,0.16)", text: "#991b1b" },
+  };
+  const variant = variants[normalized] || variants.active;
+  const label = normalized === "email_rate_limited" ? "Email limited" : normalized === "pending" ? "Pending" : "Active";
+  return { label, ...variant };
+}
+
 export default function TeamView({ store, lang, openMemberModalTrigger = 0 }) {
   const [open, setOpen] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -158,8 +170,18 @@ export default function TeamView({ store, lang, openMemberModalTrigger = 0 }) {
                 </div>
                 <div style={{ fontWeight: 700 }}>{member.display_name || member.email}</div>
                 <div style={{ fontSize: "0.78rem", color: COLORS.textDim }}>{member.email}</div>
-                <div style={{ fontSize: "0.72rem", background: COLORS.orangeSoft, color: COLORS.orangeDark, borderRadius: 999, padding: "3px 10px", alignSelf: "flex-start" }}>
-                  {member.role || "viewer"}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: "0.72rem", background: COLORS.orangeSoft, color: COLORS.orangeDark, borderRadius: 999, padding: "3px 10px", alignSelf: "flex-start" }}>
+                    {member.role || "viewer"}
+                  </div>
+                  {(() => {
+                    const badge = statusBadge(member.status);
+                    return (
+                      <div style={{ fontSize: "0.72rem", borderRadius: 999, padding: "3px 10px", background: badge.bg, color: badge.text, fontWeight: 700 }}>
+                        {badge.label}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {permissionTags.filter((tag) => member.permissions?.[tag.key]).map((tag) => (
