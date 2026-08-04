@@ -8,6 +8,7 @@ import { useAuth } from "../authStore";
 const APP_LABELS = {
   accounting: "AccounTrack",
   lexcase: "LexCase",
+  "app-lexcase": "LexCase",
   taxplan: "TaxPlan Pro",
   fininsight: "FinInsight",
 };

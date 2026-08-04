@@ -86,6 +86,11 @@ export function useLexCaseStore(userId) {
   const [loading, setLoading] = useState(true);
   const [syncError, setSyncError] = useState(false);
 
+  const persistSnapshot = useCallback((nextCases = cases, nextTeam = team, nextCharges = charges) => {
+    if (!userId) return;
+    saveCache(userId, { cases: nextCases, team: nextTeam, charges: nextCharges });
+  }, [userId, cases, team, charges]);
+
   // Load everything for the signed-in user whenever the user changes
   // (login, logout, switching accounts, or simply navigating back
   // into the LexCase page — this whole hook remounts fresh every
@@ -168,17 +173,16 @@ export function useLexCaseStore(userId) {
     const toPersist = { ...record, id: finalId, createdAt: prev?.createdAt || record.createdAt || now, updatedAt: now };
     setCases((current) => {
       const idx = current.findIndex((c) => c.id === finalId);
-      if (idx === -1) return [...current, toPersist];
-      const next = [...current];
-      next[idx] = toPersist;
-      return next;
+      const nextCases = idx === -1 ? [...current, toPersist] : [...current.slice(0, idx), toPersist, ...current.slice(idx + 1)];
+      persistSnapshot(nextCases, team, charges);
+      return nextCases;
     });
     if (userId) {
       const { id, ...data } = toPersist;
       supabase.from("cases").upsert({ id, user_id: userId, data, updated_at: now })
         .then(({ error }) => logError("save case", error));
     }
-  }, [userId, cases]);
+  }, [userId, cases, team, charges, persistSnapshot]);
 
   // Used by Excel/CSV import: takes many records at once, updates local
   // state in a single pass, and — critically — does ONE batched Supabase
@@ -198,7 +202,9 @@ export function useLexCaseStore(userId) {
       byId.set(finalId, next);
       return next;
     });
-    setCases(Array.from(byId.values()));
+    const nextCases = Array.from(byId.values());
+    setCases(nextCases);
+    persistSnapshot(nextCases, team, charges);
 
     if (!userId || finalized.length === 0) return { savedCount: finalized.length, error: null };
 
@@ -206,15 +212,17 @@ export function useLexCaseStore(userId) {
     const { error } = await supabase.from("cases").upsert(rows);
     logError("bulk-save cases", error);
     return { savedCount: error ? 0 : finalized.length, error };
-  }, [userId, cases]);
+  }, [userId, cases, team, charges, persistSnapshot]);
 
   const deleteCase = useCallback((id) => {
-    setCases((current) => current.filter((c) => c.id !== id));
+    const nextCases = cases.filter((c) => c.id !== id);
+    setCases(nextCases);
+    persistSnapshot(nextCases, team, charges);
     if (userId) {
       supabase.from("cases").delete().eq("id", id).eq("user_id", userId)
         .then(({ error }) => logError("delete case", error));
     }
-  }, [userId]);
+  }, [userId, cases, team, charges, persistSnapshot]);
 
   // Documents attached to a case's "เอกสารในสำนวน" tab.
   // doc: { id, title, effectiveDate, fileName, fileData (base64), uploadedAt, uploadedBy }
@@ -223,59 +231,69 @@ export function useLexCaseStore(userId) {
     const current = cases.find((c) => c.id === caseId);
     if (!current) return;
     const toPersist = { ...current, documents: [...(current.documents || []), doc], updatedAt: now };
-    setCases((cs) => cs.map((c) => (c.id === caseId ? toPersist : c)));
+    const nextCases = cases.map((c) => (c.id === caseId ? toPersist : c));
+    setCases(nextCases);
+    persistSnapshot(nextCases, team, charges);
     if (userId) {
       const { id, ...data } = toPersist;
       supabase.from("cases").upsert({ id, user_id: userId, data, updated_at: now })
         .then(({ error }) => logError("save case document", error));
     }
-  }, [userId, cases]);
+  }, [userId, cases, team, charges, persistSnapshot]);
 
   const deleteCaseDocument = useCallback((caseId, docId) => {
     const now = new Date().toISOString();
     const current = cases.find((c) => c.id === caseId);
     if (!current) return;
     const toPersist = { ...current, documents: (current.documents || []).filter((d) => d.id !== docId), updatedAt: now };
-    setCases((cs) => cs.map((c) => (c.id === caseId ? toPersist : c)));
+    const nextCases = cases.map((c) => (c.id === caseId ? toPersist : c));
+    setCases(nextCases);
+    persistSnapshot(nextCases, team, charges);
     if (userId) {
       const { id, ...data } = toPersist;
       supabase.from("cases").upsert({ id, user_id: userId, data, updated_at: now })
         .then(({ error }) => logError("remove case document", error));
     }
-  }, [userId, cases]);
+  }, [userId, cases, team, charges, persistSnapshot]);
 
   const addCharge = useCallback((label) => {
     const clean = (label || "").trim();
     if (!clean) return;
-    setCharges((current) => (current.includes(clean) ? current : [...current, clean]));
+    const nextCharges = charges.includes(clean) ? charges : [...charges, clean];
+    setCharges(nextCharges);
+    persistSnapshot(cases, team, nextCharges);
     if (userId) {
       supabase.from("charges").upsert({ user_id: userId, label: clean })
         .then(({ error }) => logError("save charge", error));
     }
-  }, [userId]);
+  }, [userId, cases, team, charges, persistSnapshot]);
 
   const upsertMember = useCallback((record) => {
-    setTeam((current) => {
-      const idx = current.findIndex((m) => m.id === record.id);
-      if (idx === -1) return [...current, record];
-      const next = [...current];
+    const nextTeam = (() => {
+      const idx = team.findIndex((m) => m.id === record.id);
+      if (idx === -1) return [...team, record];
+      const next = [...team];
       next[idx] = record;
       return next;
-    });
+    })();
+    setTeam(nextTeam);
+    persistSnapshot(cases, nextTeam, charges);
     if (userId) {
       const { id, name, position, photo } = record;
       supabase.from("team_members").upsert({ id, user_id: userId, name, position: position || "", photo: photo || null })
         .then(({ error }) => logError("save team member", error));
     }
-  }, [userId]);
+  }, [userId, cases, team, charges, persistSnapshot]);
 
   const deleteMember = useCallback((id) => {
-    setTeam((current) => current.filter((m) => m.id !== id));
+    const nextTeam = team.filter((m) => m.id !== id);
+    setTeam(nextTeam);
+    persistSnapshot(cases, nextTeam, charges);
     if (userId) {
       supabase.from("team_members").delete().eq("id", id).eq("user_id", userId)
         .then(({ error }) => logError("delete team member", error));
     }
-  }, [userId]);
+  }, [userId, cases, team, charges, persistSnapshot]);
 
   return {
     lang, toggleLang, loading, syncError,
