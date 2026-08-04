@@ -67,7 +67,7 @@ export default function TeamView({ store, lang }) {
     }
 
     try {
-      await store.createTeamMember({
+      const result = await store.createTeamMember({
         id: makeId("member"),
         name: cleanName,
         position: form.position || "",
@@ -77,6 +77,11 @@ export default function TeamView({ store, lang }) {
         role: form.role || "viewer",
         permissions: form.permissions || { ...DEFAULT_SUB_ACCOUNT_PERMISSIONS },
       });
+
+      if (result?.emailRateLimited) {
+        setSaveError("ส่งอีเมลยืนยันของ Supabase ถูกจำกัดชั่วคราว กรุณาลองใหม่อีกครั้งใน 1–2 นาที ระบบได้บันทึกข้อมูลทีมไว้แล้ว");
+        return;
+      }
 
       setSaveError("");
       setForm({

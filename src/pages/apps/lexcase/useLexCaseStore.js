@@ -72,6 +72,14 @@ function logError(action, error) {
   }
 }
 
+function formatSubAccountError(error) {
+  const msg = (error?.message || "").toLowerCase();
+  if (/rate limit|too many requests|email.*limit/i.test(msg)) {
+    return "ส่งอีเมลของ Supabase ถูกจำกัดชั่วคราว กรุณาลองใหม่อีกครั้งใน 1–2 นาที";
+  }
+  return error?.message || "ไม่สามารถสร้าง sub-account ได้";
+}
+
 let uidCounter = 0;
 export function makeId(prefix = "id") {
   uidCounter += 1;
@@ -331,13 +339,18 @@ export function useLexCaseStore(userId) {
       password: cleanPassword,
       options: { data: { name: cleanName } },
     });
-    if (signUpError) throw new Error(signUpError.message);
 
     const authUserId = signUpData?.user?.id || null;
     const teamMemberId = record.id || makeId("member");
     const subAccountId = authUserId || makeId("subaccount");
-
     const nextTeam = [...team, { id: teamMemberId, name: cleanName, position: record.position || "", photo: record.photo || "" }];
+    const normalizedPermissions = {
+      viewCases: true,
+      editCases: permissions?.editCases ?? false,
+      manageTeam: permissions?.manageTeam ?? false,
+      managePermissions: permissions?.managePermissions ?? false,
+    };
+
     setTeam(nextTeam);
     persistSnapshot(cases, nextTeam, charges, subAccounts);
 
@@ -350,6 +363,9 @@ export function useLexCaseStore(userId) {
     });
     logError("save team member", memberSync.error);
 
+    const isEmailLimit = /rate limit|too many requests|email.*limit/i.test(signUpError?.message || "");
+    const pendingStatus = isEmailLimit ? "email_rate_limited" : authUserId ? "active" : "pending";
+
     const subAccountSync = await supabase.from("lexcase_sub_accounts").upsert({
       id: subAccountId,
       user_id: userId,
@@ -357,13 +373,8 @@ export function useLexCaseStore(userId) {
       email: cleanEmail,
       display_name: cleanName,
       role,
-      permissions: {
-        viewCases: true,
-        editCases: permissions?.editCases ?? false,
-        manageTeam: permissions?.manageTeam ?? false,
-        managePermissions: permissions?.managePermissions ?? false,
-      },
-      status: authUserId ? "active" : "pending",
+      permissions: normalizedPermissions,
+      status: pendingStatus,
     });
     logError("save sub-account", subAccountSync.error);
 
@@ -372,16 +383,18 @@ export function useLexCaseStore(userId) {
       email: cleanEmail,
       display_name: cleanName,
       role,
-      permissions: {
-        viewCases: true,
-        editCases: permissions?.editCases ?? false,
-        manageTeam: permissions?.manageTeam ?? false,
-        managePermissions: permissions?.managePermissions ?? false,
-      },
-      status: authUserId ? "active" : "pending",
+      permissions: normalizedPermissions,
+      status: pendingStatus,
     }];
     setSubAccounts(nextSubAccounts);
     persistSnapshot(cases, nextTeam, charges, nextSubAccounts);
+
+    if (signUpError) {
+      if (isEmailLimit) {
+        return { teamMemberId, subAccountId, authUserId, emailRateLimited: true };
+      }
+      throw new Error(formatSubAccountError(signUpError));
+    }
 
     return { teamMemberId, subAccountId, authUserId };
   }, [userId, cases, team, charges, subAccounts, persistSnapshot]);
