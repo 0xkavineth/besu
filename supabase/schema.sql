@@ -93,6 +93,7 @@ create policy "team_members_delete_own" on public.team_members
 create table if not exists public.lexcase_sub_accounts (
   id text primary key,
   user_id uuid not null references auth.users (id) on delete cascade,
+  auth_user_id uuid,
   email text not null,
   display_name text not null default '',
   role text not null default 'viewer',

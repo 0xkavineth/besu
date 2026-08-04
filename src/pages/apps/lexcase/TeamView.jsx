@@ -27,11 +27,12 @@ function initials(name) {
 
 export default function TeamView({ store, lang }) {
   const [open, setOpen] = useState(false);
-  const [subOpen, setSubOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", position: "", photo: "" });
-  const [subForm, setSubForm] = useState({
+  const [form, setForm] = useState({
+    name: "",
+    position: "",
+    photo: "",
     email: "",
-    displayName: "",
+    password: "",
     role: "viewer",
     permissions: { ...DEFAULT_SUB_ACCOUNT_PERMISSIONS },
   });
@@ -46,40 +47,28 @@ export default function TeamView({ store, lang }) {
     ];
   }, []);
 
-  const save = () => {
-    if (!form.name.trim()) return;
-    store.upsertMember({ id: makeId("member"), ...form });
-    setForm({ name: "", position: "", photo: "" });
-    setOpen(false);
-  };
-
-  const saveSubAccount = () => {
-    if (!subForm.email.trim() || !subForm.email.includes("@")) return;
-    store.upsertSubAccount({
-      id: makeId("subaccount"),
-      email: subForm.email,
-      display_name: subForm.displayName || subForm.email.split("@")[0],
-      role: subForm.role,
-      permissions: subForm.permissions,
-      status: "active",
+  const save = async () => {
+    if (!form.name.trim() || !form.email.trim() || !form.password.trim()) return;
+    await store.createTeamMember({
+      id: makeId("member"),
+      name: form.name,
+      position: form.position,
+      photo: form.photo,
+      email: form.email,
+      password: form.password,
+      role: form.role,
+      permissions: form.permissions,
     });
-    setSubForm({
+    setForm({
+      name: "",
+      position: "",
+      photo: "",
       email: "",
-      displayName: "",
+      password: "",
       role: "viewer",
       permissions: { ...DEFAULT_SUB_ACCOUNT_PERMISSIONS },
     });
-    setSubOpen(false);
-  };
-
-  const togglePermission = (key) => {
-    setSubForm((current) => ({
-      ...current,
-      permissions: {
-        ...current.permissions,
-        [key]: !current.permissions[key],
-      },
-    }));
+    setOpen(false);
   };
 
   return (
@@ -125,12 +114,6 @@ export default function TeamView({ store, lang }) {
       <div style={{ marginTop: 24, borderTop: `1px solid ${COLORS.cardBorder}`, paddingTop: 22 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
           <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: "1.05rem", fontWeight: 700 }}>Sub-account access</div>
-          <button
-            onClick={() => setSubOpen(true)}
-            style={{ display: "flex", alignItems: "center", gap: 8, background: COLORS.orange, color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontWeight: 700, cursor: "pointer" }}
-          >
-            <Plus size={16} /> Add sub-account
-          </button>
         </div>
 
         {store.subAccounts.length === 0 ? (
@@ -173,29 +156,16 @@ export default function TeamView({ store, lang }) {
           <Field label={t("memberPhotoUrl", lang)}>
             <TextInput value={form.photo} onChange={(e) => setForm((f) => ({ ...f, photo: e.target.value }))} placeholder="https://..." />
           </Field>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-            <button onClick={() => setOpen(false)} style={{ background: COLORS.cardAlt, border: `1px solid ${COLORS.cardBorder}`, color: COLORS.text, borderRadius: 10, padding: "9px 20px", cursor: "pointer", fontWeight: 600 }}>
-              {t("cancel", lang)}
-            </button>
-            <button onClick={save} style={{ background: COLORS.orange, border: "none", color: "#fff", borderRadius: 10, padding: "9px 22px", cursor: "pointer", fontWeight: 700 }}>
-              {t("save", lang)}
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal open={subOpen} onClose={() => setSubOpen(false)} title="Create sub-account" width={520}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <Field label="Email">
-            <TextInput value={subForm.email} onChange={(e) => setSubForm((f) => ({ ...f, email: e.target.value }))} placeholder="sub-account@company.com" />
+          <Field label="Email (sub-account)">
+            <TextInput type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="member@company.com" />
           </Field>
-          <Field label="Display name">
-            <TextInput value={subForm.displayName} onChange={(e) => setSubForm((f) => ({ ...f, displayName: e.target.value }))} placeholder="Jane Doe" />
+          <Field label="Password">
+            <TextInput type="password" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} placeholder="Minimum 6 characters" />
           </Field>
           <Field label="Role">
             <select
-              value={subForm.role}
-              onChange={(e) => setSubForm((f) => ({ ...f, role: e.target.value }))}
+              value={form.role}
+              onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
               style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: `1px solid ${COLORS.cardBorder}`, background: COLORS.card, color: COLORS.text }}
             >
               {ROLE_OPTIONS.map((option) => (
@@ -210,25 +180,31 @@ export default function TeamView({ store, lang }) {
                 <label key={tag.key} style={{ display: "flex", alignItems: "center", gap: 8, background: COLORS.cardAlt, padding: "10px 12px", borderRadius: 10 }}>
                   <input
                     type="checkbox"
-                    checked={!!subForm.permissions[tag.key]}
-                    onChange={() => togglePermission(tag.key)}
+                    checked={!!form.permissions[tag.key]}
+                    onChange={() => setForm((current) => ({
+                      ...current,
+                      permissions: {
+                        ...current.permissions,
+                        [tag.key]: !current.permissions[tag.key],
+                      },
+                    }))}
                   />
                   <span style={{ fontSize: "0.8rem" }}>{tag.label}</span>
                 </label>
               ))}
             </div>
           </div>
-
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-            <button onClick={() => setSubOpen(false)} style={{ background: COLORS.cardAlt, border: `1px solid ${COLORS.cardBorder}`, color: COLORS.text, borderRadius: 10, padding: "9px 20px", cursor: "pointer", fontWeight: 600 }}>
-              Cancel
+            <button onClick={() => setOpen(false)} style={{ background: COLORS.cardAlt, border: `1px solid ${COLORS.cardBorder}`, color: COLORS.text, borderRadius: 10, padding: "9px 20px", cursor: "pointer", fontWeight: 600 }}>
+              {t("cancel", lang)}
             </button>
-            <button onClick={saveSubAccount} style={{ background: COLORS.orange, border: "none", color: "#fff", borderRadius: 10, padding: "9px 22px", cursor: "pointer", fontWeight: 700 }}>
-              Save
+            <button onClick={save} style={{ background: COLORS.orange, border: "none", color: "#fff", borderRadius: 10, padding: "9px 22px", cursor: "pointer", fontWeight: 700 }}>
+              {t("save", lang)}
             </button>
           </div>
         </div>
       </Modal>
+
     </div>
   );
 }

@@ -285,13 +285,75 @@ export function useLexCaseStore(userId) {
       return next;
     })();
     setTeam(nextTeam);
-    persistSnapshot(cases, nextTeam, charges);
+    persistSnapshot(cases, nextTeam, charges, subAccounts);
     if (userId) {
       const { id, name, position, photo } = record;
       supabase.from("team_members").upsert({ id, user_id: userId, name, position: position || "", photo: photo || null })
         .then(({ error }) => logError("save team member", error));
     }
-  }, [userId, cases, team, charges, persistSnapshot]);
+  }, [userId, cases, team, charges, subAccounts, persistSnapshot]);
+
+  const createTeamMember = useCallback(async (record) => {
+    if (!userId) return null;
+    const cleanEmail = (record.email || "").trim().toLowerCase();
+    const cleanName = (record.name || "").trim();
+    const cleanPassword = (record.password || "").trim();
+    const role = record.role || "viewer";
+    const permissions = record.permissions || {};
+
+    if (!cleanName) throw new Error("กรุณากรอกชื่อ-นามสกุล");
+    if (!cleanEmail || !cleanEmail.includes("@")) throw new Error("กรุณากรอกอีเมลให้ถูกต้อง");
+    if (cleanPassword.length < 6) throw new Error("รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร");
+
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      email: cleanEmail,
+      password: cleanPassword,
+      options: { data: { name: cleanName } },
+    });
+    if (signUpError) throw new Error(signUpError.message);
+
+    const authUserId = signUpData?.user?.id || null;
+    const teamMemberId = record.id || makeId("member");
+    const subAccountId = authUserId || makeId("subaccount");
+
+    const nextTeam = [...team, { id: teamMemberId, name: cleanName, position: record.position || "", photo: record.photo || "" }];
+    setTeam(nextTeam);
+    persistSnapshot(cases, nextTeam, charges, subAccounts);
+
+    const memberSync = await supabase.from("team_members").upsert({
+      id: teamMemberId,
+      user_id: userId,
+      name: cleanName,
+      position: record.position || "",
+      photo: record.photo || null,
+    });
+    logError("save team member", memberSync.error);
+
+    const subAccountSync = await supabase.from("lexcase_sub_accounts").upsert({
+      id: subAccountId,
+      user_id: userId,
+      auth_user_id: authUserId,
+      email: cleanEmail,
+      display_name: cleanName,
+      role,
+      permissions,
+      status: authUserId ? "active" : "pending",
+    });
+    logError("save sub-account", subAccountSync.error);
+
+    const nextSubAccounts = [...subAccounts, {
+      id: subAccountId,
+      email: cleanEmail,
+      display_name: cleanName,
+      role,
+      permissions,
+      status: authUserId ? "active" : "pending",
+    }];
+    setSubAccounts(nextSubAccounts);
+    persistSnapshot(cases, nextTeam, charges, nextSubAccounts);
+
+    return { teamMemberId, subAccountId, authUserId };
+  }, [userId, cases, team, charges, subAccounts, persistSnapshot]);
 
   const deleteMember = useCallback((id) => {
     const nextTeam = team.filter((m) => m.id !== id);
@@ -340,7 +402,7 @@ export function useLexCaseStore(userId) {
   return {
     lang, toggleLang, loading, syncError,
     cases, upsertCase, bulkUpsertCases, deleteCase, addCaseDocument, deleteCaseDocument,
-    team, upsertMember, deleteMember,
+    team, upsertMember, createTeamMember, deleteMember,
     subAccounts, upsertSubAccount, deleteSubAccount,
     charges, addCharge,
   };
