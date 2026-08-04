@@ -44,6 +44,9 @@ function translateAuthError(error) {
   if (/already registered|user already exists/i.test(msg)) return "มีบัญชีที่ใช้อีเมลนี้อยู่แล้ว ลองเข้าสู่ระบบแทน";
   if (/email not confirmed/i.test(msg)) return "กรุณายืนยันอีเมลของคุณก่อนเข้าสู่ระบบ (ตรวจสอบกล่องข้อความอีเมล)";
   if (/password should be at least/i.test(msg)) return "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร";
+  if (/rate limit|too many requests|email.*limit/i.test(msg)) {
+    return "ส่งอีเมลยืนยันถูกจำกัดชั่วคราว กรุณาลองใหม่อีกครั้งใน 1–2 นาที";
+  }
   return msg || "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง";
 }
 
@@ -104,6 +107,24 @@ function AuthProvider({ children }) {
     if (error) throw new Error(translateAuthError(error));
 
     if (!data.user) return null;
+
+    if (data.session) {
+      const { error: profileError } = await supabase.from("profiles").upsert({
+        id: data.user.id,
+        name: cleanName,
+        avatar: null,
+        phone: "",
+        notifications: true,
+        line_linked: false,
+        plan: "free",
+        provider: "email",
+      }, { onConflict: "id" });
+      if (profileError) {
+        // eslint-disable-next-line no-console
+        console.warn("Failed to sync profile row during signup:", profileError.message);
+      }
+    }
+
     // If email confirmation is required, there's no session yet —
     // still return a best-effort session object so the UI can show
     // a "check your email" style success state via the caller.
