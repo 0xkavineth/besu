@@ -72,7 +72,14 @@ alter table public.team_members enable row level security;
 
 drop policy if exists "team_members_select_own" on public.team_members;
 create policy "team_members_select_own" on public.team_members
-  for select using (auth.uid() = user_id);
+  for select using (
+    auth.uid() = user_id
+    OR EXISTS (
+      SELECT 1 FROM public.lexcase_sub_accounts sub
+      WHERE sub.user_id = team_members.user_id
+        AND sub.auth_user_id = auth.uid()
+    )
+  );
 
 drop policy if exists "team_members_insert_own" on public.team_members;
 create policy "team_members_insert_own" on public.team_members
@@ -109,7 +116,14 @@ alter table public.lexcase_sub_accounts enable row level security;
 
 drop policy if exists "lexcase_sub_accounts_select_own" on public.lexcase_sub_accounts;
 create policy "lexcase_sub_accounts_select_own" on public.lexcase_sub_accounts
-  for select using (auth.uid() = user_id);
+  for select using (
+    auth.uid() = user_id
+    OR EXISTS (
+      SELECT 1 FROM public.lexcase_sub_accounts sub
+      WHERE sub.user_id = lexcase_sub_accounts.user_id
+        AND sub.auth_user_id = auth.uid()
+    )
+  );
 
 drop policy if exists "lexcase_sub_accounts_insert_own" on public.lexcase_sub_accounts;
 create policy "lexcase_sub_accounts_insert_own" on public.lexcase_sub_accounts
@@ -142,7 +156,14 @@ alter table public.cases enable row level security;
 
 drop policy if exists "cases_select_own" on public.cases;
 create policy "cases_select_own" on public.cases
-  for select using (auth.uid() = user_id);
+  for select using (
+    auth.uid() = user_id
+    OR EXISTS (
+      SELECT 1 FROM public.lexcase_sub_accounts sub
+      WHERE sub.user_id = cases.user_id
+        AND sub.auth_user_id = auth.uid()
+    )
+  );
 
 drop policy if exists "cases_insert_own" on public.cases;
 create policy "cases_insert_own" on public.cases
@@ -170,7 +191,14 @@ alter table public.charges enable row level security;
 
 drop policy if exists "charges_select_own" on public.charges;
 create policy "charges_select_own" on public.charges
-  for select using (auth.uid() = user_id);
+  for select using (
+    auth.uid() = user_id
+    OR EXISTS (
+      SELECT 1 FROM public.lexcase_sub_accounts sub
+      WHERE sub.user_id = charges.user_id
+        AND sub.auth_user_id = auth.uid()
+    )
+  );
 
 drop policy if exists "charges_insert_own" on public.charges;
 create policy "charges_insert_own" on public.charges
