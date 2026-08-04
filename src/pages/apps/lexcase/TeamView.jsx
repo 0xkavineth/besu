@@ -27,6 +27,7 @@ function initials(name) {
 
 export default function TeamView({ store, lang }) {
   const [open, setOpen] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [form, setForm] = useState({
     name: "",
     position: "",
@@ -48,27 +49,49 @@ export default function TeamView({ store, lang }) {
   }, []);
 
   const save = async () => {
-    if (!form.name.trim() || !form.email.trim() || !form.password.trim()) return;
-    await store.createTeamMember({
-      id: makeId("member"),
-      name: form.name,
-      position: form.position,
-      photo: form.photo,
-      email: form.email,
-      password: form.password,
-      role: form.role,
-      permissions: form.permissions,
-    });
-    setForm({
-      name: "",
-      position: "",
-      photo: "",
-      email: "",
-      password: "",
-      role: "viewer",
-      permissions: { ...DEFAULT_SUB_ACCOUNT_PERMISSIONS },
-    });
-    setOpen(false);
+    const cleanName = (form.name || "").trim();
+    const cleanEmail = (form.email || "").trim().toLowerCase();
+    const cleanPassword = (form.password || "").trim();
+
+    if (!cleanName) {
+      setSaveError("กรุณากรอกชื่อ-นามสกุล");
+      return;
+    }
+    if (!cleanEmail || !cleanEmail.includes("@")) {
+      setSaveError("กรุณากรอกอีเมลให้ถูกต้อง");
+      return;
+    }
+    if (cleanPassword.length < 6) {
+      setSaveError("รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร");
+      return;
+    }
+
+    try {
+      await store.createTeamMember({
+        id: makeId("member"),
+        name: cleanName,
+        position: form.position || "",
+        photo: form.photo || "",
+        email: cleanEmail,
+        password: cleanPassword,
+        role: form.role || "viewer",
+        permissions: form.permissions || { ...DEFAULT_SUB_ACCOUNT_PERMISSIONS },
+      });
+
+      setSaveError("");
+      setForm({
+        name: "",
+        position: "",
+        photo: "",
+        email: "",
+        password: "",
+        role: "viewer",
+        permissions: { ...DEFAULT_SUB_ACCOUNT_PERMISSIONS },
+      });
+      setOpen(false);
+    } catch (error) {
+      setSaveError(error?.message || "ไม่สามารถสร้าง sub-account ได้");
+    }
   };
 
   return (
@@ -76,7 +99,10 @@ export default function TeamView({ store, lang }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: "1.3rem", fontWeight: 700 }}>{t("nav_team", lang)}</div>
         <button
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            setSaveError("");
+            setOpen(true);
+          }}
           style={{ display: "flex", alignItems: "center", gap: 8, background: COLORS.orange, color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontWeight: 700, cursor: "pointer" }}
         >
           <Plus size={16} /> {t("addMember", lang)}
@@ -145,8 +171,16 @@ export default function TeamView({ store, lang }) {
         )}
       </div>
 
-      <Modal open={open} onClose={() => setOpen(false)} title={t("addMember", lang)} width={440}>
+      <Modal open={open} onClose={() => {
+        setSaveError("");
+        setOpen(false);
+      }} title={t("addMember", lang)} width={440}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {saveError && (
+            <div style={{ padding: "10px 12px", borderRadius: 10, background: "rgba(239,68,68,0.09)", color: "#b91c1c", fontSize: "0.8rem", border: "1px solid rgba(239,68,68,0.25)" }}>
+              {saveError}
+            </div>
+          )}
           <Field label={t("memberName", lang)}>
             <TextInput value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
           </Field>
@@ -195,7 +229,10 @@ export default function TeamView({ store, lang }) {
             </div>
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-            <button onClick={() => setOpen(false)} style={{ background: COLORS.cardAlt, border: `1px solid ${COLORS.cardBorder}`, color: COLORS.text, borderRadius: 10, padding: "9px 20px", cursor: "pointer", fontWeight: 600 }}>
+            <button onClick={() => {
+              setSaveError("");
+              setOpen(false);
+            }} style={{ background: COLORS.cardAlt, border: `1px solid ${COLORS.cardBorder}`, color: COLORS.text, borderRadius: 10, padding: "9px 20px", cursor: "pointer", fontWeight: 600 }}>
               {t("cancel", lang)}
             </button>
             <button onClick={save} style={{ background: COLORS.orange, border: "none", color: "#fff", borderRadius: 10, padding: "9px 22px", cursor: "pointer", fontWeight: 700 }}>
