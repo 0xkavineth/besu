@@ -81,15 +81,16 @@ export function makeId(prefix = "id") {
 export function useLexCaseStore(userId) {
   const [cases, setCases] = useState([]);
   const [team, setTeam] = useState([]);
+  const [subAccounts, setSubAccounts] = useState([]);
   const [charges, setCharges] = useState(DEFAULT_CHARGES);
   const [lang, setLang] = useState(() => loadLang());
   const [loading, setLoading] = useState(true);
   const [syncError, setSyncError] = useState(false);
 
-  const persistSnapshot = useCallback((nextCases = cases, nextTeam = team, nextCharges = charges) => {
+  const persistSnapshot = useCallback((nextCases = cases, nextTeam = team, nextCharges = charges, nextSubAccounts = subAccounts) => {
     if (!userId) return;
-    saveCache(userId, { cases: nextCases, team: nextTeam, charges: nextCharges });
-  }, [userId, cases, team, charges]);
+    saveCache(userId, { cases: nextCases, team: nextTeam, charges: nextCharges, subAccounts: nextSubAccounts });
+  }, [userId, cases, team, charges, subAccounts]);
 
   // Load everything for the signed-in user whenever the user changes
   // (login, logout, switching accounts, or simply navigating back
@@ -99,6 +100,7 @@ export function useLexCaseStore(userId) {
     if (!userId) {
       setCases([]);
       setTeam([]);
+      setSubAccounts([]);
       setCharges(DEFAULT_CHARGES);
       setLoading(false);
       setSyncError(false);
@@ -111,6 +113,7 @@ export function useLexCaseStore(userId) {
     if (cached) {
       setCases(cached.cases || []);
       setTeam(cached.team || []);
+      setSubAccounts(cached.subAccounts || []);
       setCharges(cached.charges?.length ? cached.charges : DEFAULT_CHARGES);
       setLoading(false);
     } else {
@@ -119,17 +122,19 @@ export function useLexCaseStore(userId) {
 
     let cancelled = false;
     (async () => {
-      const [casesRes, teamRes, chargesRes] = await Promise.all([
+      const [casesRes, teamRes, subAccountsRes, chargesRes] = await Promise.all([
         supabase.from("cases").select("id, data").eq("user_id", userId),
         supabase.from("team_members").select("id, name, position, photo").eq("user_id", userId).order("created_at"),
+        supabase.from("lexcase_sub_accounts").select("id, email, display_name, role, permissions, status").eq("user_id", userId).order("created_at"),
         supabase.from("charges").select("label").eq("user_id", userId),
       ]);
       if (cancelled) return;
       logError("load cases", casesRes.error);
       logError("load team", teamRes.error);
+      logError("load sub-accounts", subAccountsRes.error);
       logError("load charges", chargesRes.error);
 
-      const anyError = !!(casesRes.error || teamRes.error || chargesRes.error);
+      const anyError = !!(casesRes.error || teamRes.error || subAccountsRes.error || chargesRes.error);
       setSyncError(anyError);
 
       // Only trust Supabase's answer when the read actually succeeded.
@@ -142,6 +147,9 @@ export function useLexCaseStore(userId) {
       }
       if (!teamRes.error) {
         setTeam(teamRes.data || []);
+      }
+      if (!subAccountsRes.error) {
+        setSubAccounts(subAccountsRes.data || []);
       }
       if (!chargesRes.error) {
         const labels = (chargesRes.data || []).map((row) => row.label);
@@ -157,8 +165,8 @@ export function useLexCaseStore(userId) {
   // reliable fallback regardless of Supabase's availability.
   useEffect(() => {
     if (!userId) return;
-    saveCache(userId, { cases, team, charges });
-  }, [userId, cases, team, charges]);
+    saveCache(userId, { cases, team, charges, subAccounts });
+  }, [userId, cases, team, charges, subAccounts]);
 
   useEffect(() => { saveLang(lang); }, [lang]);
 
@@ -288,17 +296,52 @@ export function useLexCaseStore(userId) {
   const deleteMember = useCallback((id) => {
     const nextTeam = team.filter((m) => m.id !== id);
     setTeam(nextTeam);
-    persistSnapshot(cases, nextTeam, charges);
+    persistSnapshot(cases, nextTeam, charges, subAccounts);
     if (userId) {
       supabase.from("team_members").delete().eq("id", id).eq("user_id", userId)
         .then(({ error }) => logError("delete team member", error));
     }
-  }, [userId, cases, team, charges, persistSnapshot]);
+  }, [userId, cases, team, charges, subAccounts, persistSnapshot]);
+
+  const upsertSubAccount = useCallback((record) => {
+    const nextSubAccounts = (() => {
+      const idx = subAccounts.findIndex((m) => m.id === record.id);
+      if (idx === -1) return [...subAccounts, record];
+      const next = [...subAccounts];
+      next[idx] = record;
+      return next;
+    })();
+    setSubAccounts(nextSubAccounts);
+    persistSnapshot(cases, team, charges, nextSubAccounts);
+    if (userId) {
+      const { id, email, display_name, role, permissions, status } = record;
+      supabase.from("lexcase_sub_accounts").upsert({
+        id,
+        user_id: userId,
+        email: (email || "").trim().toLowerCase(),
+        display_name: (display_name || "").trim(),
+        role: role || "viewer",
+        permissions: permissions || {},
+        status: status || "active",
+      }).then(({ error }) => logError("save sub-account", error));
+    }
+  }, [userId, cases, team, charges, subAccounts, persistSnapshot]);
+
+  const deleteSubAccount = useCallback((id) => {
+    const nextSubAccounts = subAccounts.filter((m) => m.id !== id);
+    setSubAccounts(nextSubAccounts);
+    persistSnapshot(cases, team, charges, nextSubAccounts);
+    if (userId) {
+      supabase.from("lexcase_sub_accounts").delete().eq("id", id).eq("user_id", userId)
+        .then(({ error }) => logError("delete sub-account", error));
+    }
+  }, [userId, cases, team, charges, subAccounts, persistSnapshot]);
 
   return {
     lang, toggleLang, loading, syncError,
     cases, upsertCase, bulkUpsertCases, deleteCase, addCaseDocument, deleteCaseDocument,
     team, upsertMember, deleteMember,
+    subAccounts, upsertSubAccount, deleteSubAccount,
     charges, addCharge,
   };
 }

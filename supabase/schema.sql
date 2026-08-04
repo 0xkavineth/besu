@@ -87,7 +87,43 @@ create policy "team_members_delete_own" on public.team_members
   for delete using (auth.uid() = user_id);
 
 -- ============================================================
--- 3. cases — one row per case; the whole case record (charges,
+-- 3. lexcase_sub_accounts — owner-managed sub-accounts inside
+--    LexCase, each carrying a role and granular permissions payload.
+-- ============================================================
+create table if not exists public.lexcase_sub_accounts (
+  id text primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  email text not null,
+  display_name text not null default '',
+  role text not null default 'viewer',
+  permissions jsonb not null default '{}'::jsonb,
+  status text not null default 'active',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists lexcase_sub_accounts_user_id_idx on public.lexcase_sub_accounts (user_id);
+create index if not exists lexcase_sub_accounts_email_idx on public.lexcase_sub_accounts (email);
+
+alter table public.lexcase_sub_accounts enable row level security;
+
+drop policy if exists "lexcase_sub_accounts_select_own" on public.lexcase_sub_accounts;
+create policy "lexcase_sub_accounts_select_own" on public.lexcase_sub_accounts
+  for select using (auth.uid() = user_id);
+
+drop policy if exists "lexcase_sub_accounts_insert_own" on public.lexcase_sub_accounts;
+create policy "lexcase_sub_accounts_insert_own" on public.lexcase_sub_accounts
+  for insert with check (auth.uid() = user_id);
+
+drop policy if exists "lexcase_sub_accounts_update_own" on public.lexcase_sub_accounts;
+create policy "lexcase_sub_accounts_update_own" on public.lexcase_sub_accounts
+  for update using (auth.uid() = user_id);
+
+drop policy if exists "lexcase_sub_accounts_delete_own" on public.lexcase_sub_accounts;
+create policy "lexcase_sub_accounts_delete_own" on public.lexcase_sub_accounts
+  for delete using (auth.uid() = user_id);
+
+-- ============================================================
+-- 4. cases — one row per case; the whole case record (charges,
 --    owners, appointments, documents, etc.) is stored as jsonb so
 --    the shape can keep evolving without further migrations.
 -- ============================================================
@@ -120,7 +156,7 @@ create policy "cases_delete_own" on public.cases
   for delete using (auth.uid() = user_id);
 
 -- ============================================================
--- 4. charges — the list of "ข้อหา/ฐานความผิด" tags a user has
+-- 5. charges — the list of "ข้อหา/ฐานความผิด" tags a user has
 --    typed in before, so they show up as quick-pick suggestions.
 -- ============================================================
 create table if not exists public.charges (

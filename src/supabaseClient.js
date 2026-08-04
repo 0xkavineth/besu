@@ -15,8 +15,8 @@ import { createClient } from "@supabase/supabase-js";
 // real Supabase call will fail with a clear, catchable error instead
 // of crashing the whole app at load time.
 // ---------------------------------------------
-const rawUrl = import.https://timkfakfjcmzulkjdozw.supabase.co/rest/v1/;
-const rawKey = import.sb_publishable_DKyrNsao_pWJiFIkSddyvA_zOYbpmKr;
+const rawUrl = import.meta.env.VITE_SUPABASE_URL;
+const rawKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 function isValidUrl(value) {
   try {
@@ -34,8 +34,7 @@ if (!supabaseConfigured) {
   // eslint-disable-next-line no-console
   console.error(
     "[supabaseClient] Missing or invalid VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY.\n" +
-    "Add both to a .env file at the project root (see .env.example), then restart `npm run dev`\n" +
-    "(Vite only reads .env at server start — editing it while the dev server is running won't apply)."
+    "Add both to a .env file at the project root (see .env.example), then restart the Vercel build/dev process."
   );
 }
 
