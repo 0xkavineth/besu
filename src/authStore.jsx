@@ -13,17 +13,22 @@ import { supabase } from "./supabaseClient";
 
 function toSession(supaUser, profile) {
   if (!supaUser) return null;
+  const provider = (profile?.provider || supaUser.app_metadata?.provider || "email").toLowerCase();
   return {
     id: supaUser.id,
     name: profile?.name || supaUser.user_metadata?.name || "",
     email: supaUser.email,
     plan: profile?.plan || "free",
-    provider: profile?.provider || "email",
+    provider,
     avatar: profile?.avatar || null,
     phone: profile?.phone || "",
     notifications: profile?.notifications !== false,
-    lineLinked: !!profile?.line_linked,
+    lineLinked: provider === "line" || !!profile?.line_linked,
   };
+}
+
+function firstDefined(...values) {
+  return values.find((value) => value !== undefined && value !== null && value !== "") || null;
 }
 
 async function fetchProfile(userId) {
@@ -34,6 +39,32 @@ async function fetchProfile(userId) {
     return null;
   }
   return data;
+}
+
+async function syncProfileFromAuth(supaUser, existingProfile = null) {
+  if (!supaUser) return null;
+
+  const userMeta = supaUser.user_metadata || {};
+  const provider = (supaUser.app_metadata?.provider || existingProfile?.provider || "email").toLowerCase();
+  const nextProfile = {
+    id: supaUser.id,
+    name: firstDefined(userMeta.name, userMeta.full_name, userMeta.display_name, userMeta.nickname, existingProfile?.name, "") || "",
+    avatar: firstDefined(userMeta.avatar_url, userMeta.picture, userMeta.avatar, userMeta.profile_image_url, existingProfile?.avatar) || null,
+    phone: existingProfile?.phone || "",
+    notifications: existingProfile?.notifications !== false,
+    line_linked: provider === "line" || !!existingProfile?.line_linked,
+    plan: existingProfile?.plan || "free",
+    provider,
+  };
+
+  const { error } = await supabase.from("profiles").upsert(nextProfile, { onConflict: "id" });
+  if (error) {
+    // eslint-disable-next-line no-console
+    console.warn("Failed to sync profile from auth metadata:", error.message);
+    return existingProfile;
+  }
+
+  return fetchProfile(supaUser.id);
 }
 
 // Supabase's raw error messages are in English — map the common
@@ -69,8 +100,10 @@ function AuthProvider({ children }) {
       setUser(null);
       return;
     }
-    const profile = await fetchProfile(supaUser.id);
-    setUser(toSession(supaUser, profile));
+
+    const existingProfile = await fetchProfile(supaUser.id);
+    const profile = await syncProfileFromAuth(supaUser, existingProfile);
+    setUser(toSession(supaUser, profile || existingProfile));
   }, []);
 
   useEffect(() => {
@@ -165,10 +198,19 @@ function AuthProvider({ children }) {
     }
   }, []);
 
-  // Supabase does not ship LINE as a built-in social provider —
-  // it would need to be configured as a custom OIDC provider first.
   const loginWithLine = useCallback(async () => {
-    throw new Error("การเข้าสู่ระบบด้วย Line ยังไม่เปิดให้ใช้งานสำหรับระบบนี้");
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "line",
+      options: {
+        redirectTo: window.location.origin,
+        scopes: "profile openid",
+      },
+    });
+    if (error) {
+      throw new Error(
+        "ยังไม่ได้เปิดใช้งาน LINE Login ในโปรเจกต์ Supabase — ไปที่ Authentication > Providers > LINE เพื่อตั้งค่าก่อน"
+      );
+    }
   }, []);
 
   const logout = useCallback(async () => {
@@ -213,8 +255,18 @@ function AuthProvider({ children }) {
   }, [patchCurrentUser]);
 
   const linkLine = useCallback(async () => {
-    throw new Error("การเชื่อมต่อบัญชี Line ยังไม่เปิดให้ใช้งานสำหรับระบบนี้");
-  }, []);
+    if (!user) throw new Error("ไม่พบบัญชีผู้ใช้งาน");
+
+    const { error } = await supabase.auth.linkIdentity({
+      provider: "line",
+      options: {
+        redirectTo: window.location.origin,
+        scopes: "profile openid",
+      },
+    });
+    if (error) throw new Error("เชื่อมต่อบัญชี Line ไม่สำเร็จ: " + error.message);
+    return true;
+  }, [user]);
 
   const unlinkLine = useCallback(async () => {
     await patchCurrentUser({ lineLinked: false });
